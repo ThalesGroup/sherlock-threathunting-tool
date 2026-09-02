@@ -1,0 +1,31 @@
+[Unit]
+Description=Threat hunting platform (internal API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sherlock
+Group=sherlock
+WorkingDirectory=/opt/sherlock
+EnvironmentFile=/etc/sherlock/sherlock.env
+# A single worker, on purpose: in-flight hunts and their SSE streams live in process
+# memory. Multiple workers would break the live feed.
+ExecStart=/opt/sherlock/.venv/bin/python -m uvicorn api.app:create_app --factory \
+    --app-dir /opt/sherlock/src --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sherlock
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

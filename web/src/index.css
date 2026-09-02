@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The fonts (Jost, IBM Plex Mono) must be hosted with the application, never served
+   from a CDN: no outbound request is allowed from the analyst's browser. Drop the
+   files into web/public/fonts and declare the @font-face rules. Without these files,
+   the fallback stacks apply (Century Gothic is present on most Windows machines). */
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-title;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-paper;
+  }
+
+  ::selection {
+    @apply bg-accent/20;
+  }
+}
+
+@layer components {
+  .card {
+    @apply overflow-hidden rounded-xl border border-rule bg-white;
+  }
+
+  .field {
+    @apply w-full rounded-btn border border-field-border bg-white px-3 py-2 text-ink
+      placeholder:text-meta focus:border-indigo focus:outline-none;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-btn bg-navy px-4 py-2.5 text-[13px]
+      font-semibold text-white transition-colors hover:bg-navy-hover
+      disabled:cursor-not-allowed disabled:bg-slate/40;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 rounded-btn border border-field-border bg-white
+      px-3.5 py-2 text-xs font-medium text-ink transition-colors hover:bg-soft-bg
+      disabled:cursor-not-allowed disabled:text-slate/50;
+  }
+
+  .badge {
+    @apply inline-flex items-center whitespace-nowrap rounded-[5px] px-2 py-1 font-mono
+      text-[9.5px] font-semibold uppercase tracking-[0.1em];
+  }
+
+  .meta-text {
+    @apply text-[13px] text-slate;
+  }
+
+  /* Technical label: small monospace caps, the language of section headers. */
+  .label {
+    @apply font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-slate;
+  }
+
+  /* Discreet monospace meta (timestamps, counters). */
+  .meta-mono {
+    @apply font-mono text-[11px] text-meta;
+  }
+
+  .card-header {
+    @apply border-b border-rule px-4 py-3 text-[13px] font-semibold text-ink;
+  }
+
+  .bar-track {
+    @apply h-1.5 w-full overflow-hidden rounded-full bg-rule-soft;
+  }
+
+  .bar-indeterminate {
+    @apply h-full w-1/3 rounded-full bg-accent;
+    animation: bar-scroll 1.2s linear infinite;
+  }
+
+  .bar-progress {
+    @apply h-full rounded-full bg-accent transition-all duration-500;
+  }
+}
+
+@keyframes bar-scroll {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
