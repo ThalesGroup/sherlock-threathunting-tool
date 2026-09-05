@@ -73,6 +73,8 @@ tokenized on-platform regardless of the endpoint, the model only ever receives p
 ```bash
 # backend
 python3 -m venv .venv && .venv/bin/pip install -e .
+# reproducible install with the tested, pinned versions instead:
+#   .venv/bin/pip install -r requirements.txt && .venv/bin/pip install --no-deps -e .
 cp .env.example .env            # set the gateway URL, model IDs, internal DNS suffixes...
 .venv/bin/python scripts/create_account.py <username> --roles analyst,admin
 .venv/bin/uvicorn api.app:create_app --factory --app-dir src --reload
@@ -95,6 +97,29 @@ references live in `docs/`.
 - `docs/frontend-spec.md` - screens, visual direction, browser-security constraints.
 - `docs/web-search-security.md` - the open-search / egress model.
 
+## Third-party services
+
+SHERLOCK does not bundle or redistribute any external service: you bring your own
+accounts, subscriptions and API keys, and each service is used under **its own terms of
+service and pricing**, which you are responsible for complying with. Some free tiers are
+limited to non-commercial use or rate-limited; check before relying on a source in
+production.
+
+| Service | Used for | Terms / pricing |
+|---|---|---|
+| Microsoft Sentinel (Azure Monitor Logs API) | SIEM queries, read-only | [API overview](https://learn.microsoft.com/azure/azure-monitor/logs/api/overview), your Azure subscription |
+| Microsoft Defender (Microsoft Graph security API) | Advanced Hunting queries, read-only | [runHuntingQuery](https://learn.microsoft.com/graph/api/security-security-runhuntingquery), your Microsoft 365 licensing |
+| Google SecOps / Chronicle API | UDM searches, read-only | [Chronicle API](https://cloud.google.com/chronicle/docs/reference/rest), your Google SecOps subscription |
+| VirusTotal API | IOC enrichment | [Terms of service](https://www.virustotal.com/gui/terms-of-service), [public vs premium API](https://docs.virustotal.com/reference/public-vs-premium-api) - the free public API is non-commercial and rate-limited |
+| AlienVault OTX | IOC enrichment | [otx.alienvault.com](https://otx.alienvault.com/) - free API key |
+| ThreatFox (abuse.ch) | IOC enrichment | [threatfox.abuse.ch](https://threatfox.abuse.ch/api/), [abuse.ch legal](https://abuse.ch/legal/) |
+| CIRCL MISP OSINT feed | IOC enrichment, keyless | [CIRCL OSINT feed](https://www.circl.lu/doc/misp/feed-osint/) |
+| Tavily Search API | Publisher-report search (optional) | [tavily.com](https://tavily.com/) - free tier, paid plans |
+| Brave Search API | Publisher-report search (optional) | [brave.com/search/api](https://brave.com/search/api/) - paid |
+| Google Programmable Search | Publisher-report search (optional) | [Custom Search JSON API](https://developers.google.com/custom-search/v1/overview) - limited free quota |
+| LLM gateway (any OpenAI-compatible provider) | Reasoning and query generation | your provider's terms and token pricing |
+| Azure Key Vault (optional) | Secret storage | [Key Vault pricing](https://azure.microsoft.com/pricing/details/key-vault/) |
+
 ## Security
 
 Threat-intel pages and SIEM results can carry hostile text. SHERLOCK treats all external
@@ -105,3 +130,7 @@ private report rather than a public issue.
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Third-party dependencies (Python packages in `pyproject.toml` / `requirements.txt`,
+npm packages in `web/package.json`) are distributed under their own licenses, which
+remain applicable to them.
