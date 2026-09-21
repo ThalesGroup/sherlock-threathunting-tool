@@ -225,6 +225,32 @@ function SourceCard({ source }: { source: SourceConfigView }) {
         </span>
       </div>
 
+      {source.endpoint || source.model ? (
+        <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
+          {source.endpoint ? (
+            <>
+              <dt className="text-meta">Endpoint</dt>
+              <dd className="min-w-0 truncate">
+                <Mono className="text-[11px] text-slate">{source.endpoint}</Mono>
+              </dd>
+            </>
+          ) : null}
+          {source.model ? (
+            <>
+              <dt className="text-meta">Model</dt>
+              <dd className="min-w-0 truncate">
+                <Mono className="text-[11px] text-slate">{source.model}</Mono>
+              </dd>
+            </>
+          ) : null}
+          <dt className="sr-only">Scope</dt>
+          <dd className="col-span-2 text-[11px] text-meta">
+            Server-side setting (read-only here): a new key issued for another offer may
+            require another endpoint.
+          </dd>
+        </dl>
+      ) : null}
+
       {source.requirement ? <p className="mt-2 text-sm text-amber">{source.requirement}</p> : null}
 
       {source.secrets.length === 0 ? (

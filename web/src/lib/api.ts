@@ -213,6 +213,8 @@ export interface SourceConfigView {
   active: boolean
   secrets: SecretFieldView[]
   requirement: string | null
+  endpoint: string | null
+  model: string | null
 }
 
 export interface SourceTestResult {

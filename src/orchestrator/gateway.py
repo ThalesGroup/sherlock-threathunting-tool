@@ -10,13 +10,16 @@ records decisions and queries, not the raw exchanges.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
-from middleware.clients.base import outbound_verify
+from middleware.clients.base import outbound_verify, scrub_secrets
 from middleware.errors import ErrorCode, ToolError
+
+logger = logging.getLogger("shl.gateway")
 
 _DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=180.0, write=15.0, pool=5.0)
 
@@ -130,17 +133,31 @@ class GatewayClient:
                 json=body,
             )
         except httpx.HTTPError as exc:
+            logger.warning(
+                "Gateway unreachable (%s) - %s: %s",
+                self._base_url,
+                type(exc).__name__,
+                scrub_secrets(str(exc)),
+            )
             raise ToolError(
                 ErrorCode.UPSTREAM_UNAVAILABLE,
                 "AI gateway unreachable.",
             ) from exc
 
         if response.status_code == 429:
+            logger.warning("Gateway: HTTP 429 (quota) - %s", scrub_secrets(response.text))
             raise ToolError(
                 ErrorCode.RATE_LIMITED,
                 "AI gateway quota reached.",
             )
         if response.status_code >= 400:
+            logger.warning(
+                "Gateway: HTTP %s on %s (model %s) - %s",
+                response.status_code,
+                self._base_url,
+                model,
+                scrub_secrets(response.text),
+            )
             raise ToolError(
                 ErrorCode.UPSTREAM_REJECTED,
                 "Call to the AI gateway refused.",

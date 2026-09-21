@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import logging
 import re
 from datetime import UTC, datetime, timedelta
 from html.parser import HTMLParser
@@ -32,6 +33,8 @@ from middleware.errors import ToolError
 from middleware.guardrails.egress import check_destination
 from middleware.guardrails.ioc import Ioc, IocType
 from middleware.untrusted import INSTRUCTION_NOTICE, wrap
+
+logger = logging.getLogger("shl.ti_web")
 
 _SEARCH_DOMAIN = "googleapis.com"
 _SEARCH_URL = "https://www.googleapis.com/customsearch/v1"
@@ -156,6 +159,7 @@ class WebReportSource(ThreatIntelSource):
         self, campaign: str, *, limit: int, time_range: str | None = None
     ) -> list[Ioc]:
         pages = await self._find_report_pages(campaign, time_range=time_range)
+        logger.info("Web search '%s': %d page(s) retained", campaign, len(pages))
 
         collected: list[Ioc] = []
         seen: dict[str, Ioc] = {}
@@ -164,7 +168,8 @@ class WebReportSource(ThreatIntelSource):
                 extracted = await self._extract_from_page(
                     url, prefetched=prefetched, campaign=campaign
                 )
-            except ToolError:
+            except ToolError as exc:
+                logger.warning("Page skipped (%s): %s - %s", url, exc.code.value, exc.message)
                 continue
             for ioc in extracted:
                 key = f"{ioc.type.value}:{ioc.value.lower()}"
