@@ -210,6 +210,9 @@ class SourceConfigView(BaseModel):
     active: bool
     secrets: list[SecretFieldView]
     requirement: str | None = None
+    endpoint: str | None = None
+    """Current endpoint, a server-side setting shown read-only (never editable here)."""
+    model: str | None = None
 
 
 class SecretUpdateRequest(BaseModel):

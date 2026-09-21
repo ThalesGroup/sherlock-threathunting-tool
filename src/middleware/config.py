@@ -197,6 +197,11 @@ class Settings(BaseSettings):
     (e.g. `cat $(python -m certifi) internal-root.pem > bundle.pem`). Empty = public store
     only. Without it, a domain whose certificate is re-signed by the proxy is rejected."""
 
+    log_level: str = "INFO"
+    """Server log level (DEBUG, INFO, WARNING...). Outbound call failures (gateway, threat
+    intel sources) are logged at WARNING with their real cause, secrets excluded. Standard
+    output: the terminal in development, journalctl behind systemd."""
+
     secops_base_url: str = ""
     """Chronicle API endpoint. Empty (default) = derived from the region present in the
     instance path. To be set only for a special case."""

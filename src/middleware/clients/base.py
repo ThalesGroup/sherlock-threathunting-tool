@@ -6,13 +6,25 @@ structured errors: the model learns that a call failed, never where or how.
 
 from __future__ import annotations
 
+import logging
+import re
 from typing import Any
 
 import httpx
 
 from middleware.errors import ErrorCode, ToolError
 
+logger = logging.getLogger("shl.outbound")
+
 DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
+
+_SECRET_PATTERN = re.compile(r"(sk-\S+|Bearer\s+\S+|api[_-]?key[\"'=:\s]+\S+)", re.IGNORECASE)
+
+
+def scrub_secrets(text: str, limit: int = 300) -> str:
+    """Loggable excerpt of a response body: secrets masked, size bounded."""
+
+    return _SECRET_PATTERN.sub("***", text)[:limit]
 
 _OUTBOUND_VERIFY: str | bool = True
 """Certificate authority for outbound calls. `True` = public store (certifi).
@@ -104,12 +116,16 @@ class UpstreamClient:
                 params=params,
             )
         except httpx.TimeoutException as exc:
+            logger.warning("%s: timed out (%s)", self.label, type(exc).__name__)
             raise ToolError(
                 ErrorCode.UPSTREAM_UNAVAILABLE,
                 f"Timeout on {self.label}.",
                 hint="Reduce the time window or the query complexity.",
             ) from exc
         except httpx.HTTPError as exc:
+            logger.warning(
+                "%s: unreachable - %s: %s", self.label, type(exc).__name__, scrub_secrets(str(exc))
+            )
             raise ToolError(
                 ErrorCode.UPSTREAM_UNAVAILABLE,
                 f"Source {self.label} unreachable.",
@@ -129,6 +145,10 @@ class UpstreamClient:
         return payload
 
     def _check_status(self, response: httpx.Response) -> None:
+        if response.status_code >= 400:
+            logger.warning(
+                "%s: HTTP %s - %s", self.label, response.status_code, scrub_secrets(response.text)
+            )
         if response.is_redirect:
             raise ToolError(
                 ErrorCode.UPSTREAM_REJECTED,
