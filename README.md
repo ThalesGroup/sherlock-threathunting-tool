@@ -55,10 +55,27 @@ compatible gateway - set the base URL, enter your API key in the Configuration s
 choose your model IDs. Two model roles are used (analysis and query generation); they can
 be the same model. The requirement is that the model supports tool/function calling.
 
-The **anonymization model** is a second endpoint used for the semantic masking pass. It
-can be the same provider, a local model (recommended for privacy), or disabled entirely
-(the deterministic tokenization layer still runs). Because internal identifiers are
-tokenized on-platform regardless of the endpoint, the model only ever receives pseudonyms.
+The **anonymization model** is a second endpoint used for the semantic masking pass
+(`SHL_ANONYMIZER_BASE_URL` + `SHL_ANONYMIZER_MODEL`, key in the Configuration screen). Any
+OpenAI-compatible chat-completions endpoint works: a model you host (Ollama, vLLM, LM Studio),
+the same gateway as the reasoning model, or a hosted model behind an OpenAI-compatible
+facade. Leave the URL empty to reuse the gateway; set `SHL_SEMANTIC_ANONYMIZATION=false` to
+disable the pass (the deterministic tokenization layer still runs).
+
+Choose it knowingly: the reasoning model only ever receives pseudonyms, but the
+anonymization pass is the one step that reads free-text fields *before* they are fully
+masked - its job is to catch the residue the patterns missed (a name in a comment, a host in
+an unexpected format). Whatever you point it at sees that residue. A model you host, or one
+covered by a no-retention agreement you trust with raw data, is the right choice; a public
+API is not. The pass is fail-closed by default: if the model is unreachable, free-text fields
+are masked rather than sent.
+
+Validate a candidate before adopting it - recall on trapped log lines, false positives and
+resistance to a hostile log entry:
+
+```bash
+.venv/bin/python scripts/bench_anonymizer.py --models "my-model-id"
+```
 
 ## Stack
 
