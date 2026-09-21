@@ -7,6 +7,7 @@ from api.app import create_app
 from api.runtime import HuntRuntime, SiemClients
 from middleware.clients.results import QueryOutcome
 from middleware.config import Settings
+from middleware.errors import ErrorCode, ToolError
 from orchestrator.gateway import Completion, ToolCall, Usage
 from reporting.models import HuntStatus
 from storage.repository import Database, HuntRepository, SqlAuditSink
@@ -786,6 +787,56 @@ class TestConfigurationEndpoints:
         assert field["name"] == "ANONYMIZER_API_KEY"
         assert field["configured"] is True
         assert field["origin"] == "configuration"
+
+    async def test_sources_expose_their_server_side_endpoint_read_only(self, config_context):
+        """The admin sees the wired endpoint and model without being able to change them
+        here: an egress destination stays a server decision."""
+
+        client, runtime, _ = config_context
+        by_id = {
+            item["id"]: item
+            for item in (await client.get("/api/config/sources", headers=ADMIN)).json()
+        }
+        assert by_id["anonymizer"]["model"] == runtime.settings.anonymizer_model
+        assert by_id["gateway"]["model"].startswith(runtime.settings.gateway_model_query)
+        assert by_id["virustotal"]["endpoint"] is None and by_id["virustotal"]["model"] is None
+        refused = await client.put(
+            "/api/config/secrets/SHL_ANONYMIZER_BASE_URL", headers=ADMIN, json={"value": "x"}
+        )
+        assert refused.status_code in (400, 404, 422), "no generic store"
+
+    def test_gateway_refusal_names_endpoint_model_and_settings(self):
+        from api.runtime import _explain_gateway_refusal
+
+        refused = _explain_gateway_refusal(
+            ToolError(ErrorCode.UPSTREAM_REJECTED, "Call to the AI gateway refused."),
+            endpoint="https://anonymizer.example/v1",
+            model="local-model",
+            url_setting="SHL_ANONYMIZER_BASE_URL",
+            model_setting="SHL_ANONYMIZER_MODEL",
+        )
+        assert "https://anonymizer.example/v1" in refused.message
+        assert "local-model" in refused.message
+        assert "SHL_ANONYMIZER_BASE_URL" in (refused.hint or "")
+        assert "the store takes precedence over .env" in (refused.hint or "")
+
+        unreachable = _explain_gateway_refusal(
+            ToolError(ErrorCode.UPSTREAM_UNAVAILABLE, "AI gateway unreachable."),
+            endpoint="https://anonymizer.example/v1",
+            model="m",
+            url_setting="U",
+            model_setting="M",
+        )
+        assert unreachable.message == "https://anonymizer.example/v1 unreachable."
+        assert "firewall" in (unreachable.hint or "")
+
+        untouched = ToolError(ErrorCode.RATE_LIMITED, "Quota.")
+        assert (
+            _explain_gateway_refusal(
+                untouched, endpoint="e", model="m", url_setting="U", model_setting="M"
+            )
+            is untouched
+        )
 
     async def test_secret_write_is_write_only(self, config_context):
         client, _, _ = config_context

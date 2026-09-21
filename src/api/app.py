@@ -7,6 +7,7 @@ middleware.
 
 from __future__ import annotations
 
+import logging
 import secrets as pysecrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -36,6 +37,10 @@ def create_app(
     allowed_origins: tuple[str, ...] = ("http://localhost:5173",),
 ) -> FastAPI:
     resolved = settings or get_settings()
+    logging.basicConfig(
+        level=resolved.log_level.upper(),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     configure_outbound_ca(resolved.ca_bundle)
     signing_key: str | None = None
 

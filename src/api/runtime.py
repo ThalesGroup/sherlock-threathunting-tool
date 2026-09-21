@@ -188,6 +188,35 @@ class ActiveHunt:
         return self.task is not None and not self.task.done()
 
 
+def _explain_gateway_refusal(
+    error: ToolError, *, endpoint: str, model: str, url_setting: str, model_setting: str
+) -> ToolError:
+    """A bare 401/4xx says nothing about what to look at. A key issued for another offer
+    often changes the endpoint and the model too: the error names all three."""
+
+    if error.code is ErrorCode.UPSTREAM_REJECTED:
+        return ToolError(
+            ErrorCode.UPSTREAM_REJECTED,
+            f"Call refused by {endpoint} (model {model}).",
+            hint=(
+                "Key refused or unknown to this endpoint. Check that the key saved here is "
+                "the latest one (the store takes precedence over .env), and if it comes from "
+                f"another offer, the server-side endpoint and model: {url_setting}, "
+                f"{model_setting} (restart required)."
+            ),
+        )
+    if error.code is ErrorCode.UPSTREAM_UNAVAILABLE:
+        return ToolError(
+            ErrorCode.UPSTREAM_UNAVAILABLE,
+            f"{endpoint} unreachable.",
+            hint=(
+                "Network, DNS or TLS from this server (the client connects directly, without "
+                f"proxy). Check {url_setting} and the firewall flow to that host."
+            ),
+        )
+    return error
+
+
 class HuntRuntime:
     def __init__(
         self,
@@ -1219,6 +1248,7 @@ class HuntRuntime:
                     )
                 )
             active, requirement = self._source_state(definition, fields)
+            endpoint, model = self._server_settings_for(definition.id)
             views.append(
                 SourceConfigView(
                     id=definition.id,
@@ -1227,9 +1257,31 @@ class HuntRuntime:
                     active=active,
                     secrets=fields,
                     requirement=requirement,
+                    endpoint=endpoint,
+                    model=model,
                 )
             )
         return views
+
+    def _server_settings_for(self, source_id: str) -> tuple[str | None, str | None]:
+        """Current endpoint and model for the sources that have one: shown to the admin so
+        they know what is wired, without being editable from the screen (an egress
+        destination stays a server decision)."""
+
+        settings = self._settings
+        match source_id:
+            case "gateway":
+                return (
+                    settings.gateway_base_url or None,
+                    f"{settings.gateway_model_query} / {settings.gateway_model_analysis}",
+                )
+            case "anonymizer":
+                return (
+                    settings.anonymizer_base_url or settings.gateway_base_url or None,
+                    settings.anonymizer_model or None,
+                )
+            case _:
+                return None, None
 
     async def update_secret(self, name: str, value: str, *, actor: str) -> None:
         secrets = self._require_secrets()
@@ -1396,11 +1448,20 @@ class HuntRuntime:
 
         match source_id:
             case "gateway":
-                completion = await self._gateway.complete(
-                    model=settings.gateway_model_query,
-                    messages=[{"role": "user", "content": "Reply only OK."}],
-                    max_tokens=8,
-                )
+                try:
+                    completion = await self._gateway.complete(
+                        model=settings.gateway_model_query,
+                        messages=[{"role": "user", "content": "Reply only OK."}],
+                        max_tokens=8,
+                    )
+                except ToolError as error:
+                    raise _explain_gateway_refusal(
+                        error,
+                        endpoint=settings.gateway_base_url,
+                        model=settings.gateway_model_query,
+                        url_setting="SHL_GATEWAY_BASE_URL",
+                        model_setting="SHL_GATEWAY_MODEL_QUERY",
+                    ) from error
                 return f"Gateway reached, response: {completion.content.strip()[:40]}"
             case "anonymizer":
                 key = secrets.get_optional("ANONYMIZER_API_KEY")
@@ -1418,6 +1479,14 @@ class HuntRuntime:
                         messages=[{"role": "user", "content": "Reply only OK."}],
                         max_tokens=8,
                     )
+                except ToolError as error:
+                    raise _explain_gateway_refusal(
+                        error,
+                        endpoint=base,
+                        model=settings.anonymizer_model,
+                        url_setting="SHL_ANONYMIZER_BASE_URL",
+                        model_setting="SHL_ANONYMIZER_MODEL",
+                    ) from error
                 finally:
                     await client.aclose()
                 return (
