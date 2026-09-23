@@ -16,12 +16,13 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from api.accounts import MIN_PASSWORD_LENGTH, SESSION_COOKIE
 from api.auth import Principal, current_principal, require_admin, require_analyst
-from api.runtime import HuntRuntime
+from api.runtime import CONTINUABLE_STATUSES, HuntRuntime
 from api.schemas import (
     AccountView,
     AddIocsRequest,
     BudgetDecisionRequest,
     ChangePasswordRequest,
+    ContinueHuntRequest,
     CreateAccountRequest,
     CreateHuntRequest,
     CtiAnalysisView,
@@ -621,7 +622,9 @@ async def resume_options(
     row = await _repository(request).get_hunt(hunt_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown hunt.")
-    continuable = row["status"] == "interrupted" and await _runtime(request).continuable(hunt_id)
+    continuable = row["status"] in CONTINUABLE_STATUSES and await _runtime(request).continuable(
+        hunt_id
+    )
     return {"hunt_id": hunt_id, "status": row["status"], "continuable": continuable}
 
 
@@ -629,11 +632,11 @@ async def resume_options(
 async def continue_hunt(
     request: Request,
     hunt_id: str,
-    payload: StartHuntRequest | None = None,
+    payload: ContinueHuntRequest | None = None,
     principal: Principal = Depends(require_analyst),
 ) -> dict[str, Any]:
-    """Continues an interrupted hunt where its loop had stopped, budgets
-    possibly raised by the analyst."""
+    """Continues an interrupted, or concluded but unvalidated, hunt where its loop had
+    stopped, budgets possibly raised by the analyst, with an optional instruction."""
 
     try:
         hunt = await _runtime(request).continue_hunt(
@@ -641,6 +644,7 @@ async def continue_hunt(
             actor=principal.name,
             max_iterations=payload.max_iterations if payload else None,
             max_siem_queries=payload.max_siem_queries if payload else None,
+            instruction=payload.instruction if payload else None,
         )
     except ToolError as error:
         raise _http_error(error) from error
@@ -766,6 +770,7 @@ async def record_decision(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report unavailable.")
 
     runtime = _runtime(request)
+    await runtime.purge_state(hunt_id)
     if runtime.has(hunt_id):
         hunt = runtime.get(hunt_id)
         hunt.dossier.status = HuntStatus.CLOSED

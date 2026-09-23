@@ -132,6 +132,9 @@ _RESOLVED_WORKSPACE_ID = "SENTINEL_WORKSPACE_ID_RESOLVED"
 _GUID_RE = re.compile(r"^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")
 """Workspace ID resolved by the platform from the SENTINEL_* fields. Written by the
 runtime only: absent from the catalog, the API cannot set it directly."""
+CONTINUABLE_STATUSES = frozenset({HuntStatus.INTERRUPTED.value, HuntStatus.AWAITING_REVIEW.value})
+"""A hunt can be continued when interrupted, or concluded but not yet validated by the
+analyst. A validated report freezes the hunt."""
 _DEFAULT_WORKSPACE_ALIAS = "soc-principal"
 
 
@@ -1031,6 +1034,7 @@ class HuntRuntime:
         actor: str,
         max_iterations: int | None = None,
         max_siem_queries: int | None = None,
+        instruction: str | None = None,
     ) -> ActiveHunt:
         """Continues an interrupted hunt where its loop had stopped: transcript,
         pseudonyms, consumed budgets, queries and findings are reloaded from the saved
@@ -1042,8 +1046,18 @@ class HuntRuntime:
         row = await self._repository.get_hunt(hunt_id)
         if row is None:
             raise ToolError(ErrorCode.UNKNOWN_TARGET, "Unknown hunt.")
-        if row["status"] != HuntStatus.INTERRUPTED.value:
-            raise ToolError(ErrorCode.QUERY_REJECTED, "Only an interrupted hunt can be continued.")
+        if row["status"] == HuntStatus.CLOSED.value:
+            raise ToolError(
+                ErrorCode.QUERY_REJECTED,
+                "Validated report: this hunt is frozen.",
+                hint="Create a new linked investigation to go further.",
+            )
+        if row["status"] not in CONTINUABLE_STATUSES:
+            raise ToolError(
+                ErrorCode.QUERY_REJECTED,
+                "Only an interrupted, or concluded but unvalidated, hunt can be continued.",
+            )
+        after_conclusion = row["status"] == HuntStatus.AWAITING_REVIEW.value
         state = await self._repository.load_hunt_state(hunt_id)
         if not state or not state.get("messages"):
             raise ToolError(
@@ -1109,7 +1123,9 @@ class HuntRuntime:
             hunt.dossier.playbook = Playbook.model_validate(row["playbook"])
         hunt.dossier.parent_hunt_id = row.get("parent_hunt_id")
         hunt.dossier.resume_context = row.get("resume_context")
-        hunt.orchestrator.seed_messages(state["messages"])
+        hunt.orchestrator.seed_messages(
+            state["messages"], instruction=instruction, after_conclusion=after_conclusion
+        )
         self._hunts[hunt_id] = hunt
 
         await hunt.journal.record(
@@ -1119,6 +1135,9 @@ class HuntRuntime:
                 "iterations_used": saved_budget.get("iterations"),
                 "max_iterations": budgets.max_iterations,
                 "max_siem_queries": budgets.max_siem_queries,
+                "instruction": bool(instruction and instruction.strip()),
+                "from": "conclusion" if after_conclusion else "interruption",
+                **await self._previous_conclusion(hunt_id, after_conclusion),
             },
         )
         hunt.dossier.status = HuntStatus.RUNNING
@@ -1210,9 +1229,29 @@ class HuntRuntime:
         outcome = await hunt.orchestrator.run()
         await self._repository.save_report(outcome.report)
         await self._repository.replace_iocs(hunt.dossier.hunt_id, hunt.dossier.iocs)
-        if not outcome.interrupted:
-            await self._repository.delete_hunt_state(hunt.dossier.hunt_id)
+        """The loop state survives the conclusion: until the analyst validates the report,
+        the same investigation can be relaunched to complete a conclusion judged
+        insufficient. The purge happens at validation (`purge_state`)."""
         return outcome
+
+    async def _previous_conclusion(self, hunt_id: str, after_conclusion: bool) -> dict[str, Any]:
+        """The conclusion the resumption is about to replace, kept in the audit trail:
+        proposed verdict and summary, in real values (the report is rehydrated)."""
+
+        if not after_conclusion:
+            return {}
+        report = await self._repository.load_report(hunt_id)
+        if report is None:
+            return {}
+        return {
+            "previous_verdict": report.proposed_verdict.value if report.proposed_verdict else None,
+            "previous_summary": (report.summary or "")[:1_500],
+        }
+
+    async def purge_state(self, hunt_id: str) -> None:
+        """Validated report: the hunt is frozen, its loop state has no reason to remain."""
+
+        await self._repository.delete_hunt_state(hunt_id)
 
     def _budgets_for(self, request: CreateHuntRequest) -> Budgets:
         limits = self._settings.budgets

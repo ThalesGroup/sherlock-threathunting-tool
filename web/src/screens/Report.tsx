@@ -9,9 +9,9 @@
  * decision is timestamped and attributed.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   ConfidenceLabel,
@@ -23,8 +23,8 @@ import {
   SeverityBadge,
   TruncationNotice,
   VerdictBadge,
-} from '@/components/primitives'
-import { AnonymizationLine, ResultSample } from '@/components/ResultSample'
+} from "@/components/primitives";
+import { AnonymizationLine, ResultSample } from "@/components/ResultSample";
 import {
   api,
   ApiError,
@@ -32,101 +32,100 @@ import {
   type ExecutedQuery,
   type Finding,
   type Verdict,
-} from '@/lib/api'
+} from "@/lib/api";
 
 const VERDICTS: { value: Verdict; label: string }[] = [
-  { value: 'benign', label: 'Benign' },
-  { value: 'suspicious', label: 'Suspicious' },
-  { value: 'escalate', label: 'To escalate' },
-  { value: 'inconclusive', label: 'Inconclusive' },
-]
+  { value: "benign", label: "Benign" },
+  { value: "suspicious", label: "Suspicious" },
+  { value: "escalate", label: "To escalate" },
+  { value: "inconclusive", label: "Inconclusive" },
+];
 
 const VERDICT_ACCENTS: Record<Verdict, string> = {
-  benign: '#1f8a5f',
-  suspicious: '#a8560b',
-  escalate: '#8f1d1d',
-  inconclusive: '#5b6b7c',
-}
+  benign: "#1f8a5f",
+  suspicious: "#a8560b",
+  escalate: "#8f1d1d",
+  inconclusive: "#5b6b7c",
+};
 
 export function ReportScreen() {
-  const { huntId = '' } = useParams()
-  const queryClient = useQueryClient()
+  const { huntId = "" } = useParams();
+  const queryClient = useQueryClient();
   const report = useQuery({
-    queryKey: ['report', huntId],
+    queryKey: ["report", huntId],
     queryFn: () => api.report(huntId),
-  })
+  });
 
-  const [verdict, setVerdict] = useState<Verdict | null>(null)
-  const [resumeFrom, setResumeFrom] = useState<string | null>(null)
-  const [comment, setComment] = useState('')
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [resumeFrom, setResumeFrom] = useState<string | null>(null);
+  const [comment, setComment] = useState("");
 
   const decide = useMutation({
     mutationFn: () => api.decide(huntId, verdict!, comment.trim() || null),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['report', huntId] }),
-  })
+      queryClient.invalidateQueries({ queryKey: ["report", huntId] }),
+  });
 
   const exportMarkdown = useMutation({
     mutationFn: () => api.reportMarkdown(huntId),
     onSuccess: (markdown) => downloadText(`${huntId}.md`, markdown),
-  })
+  });
 
   const exportPdf = useMutation({
     mutationFn: () => api.reportPdf(huntId),
     onSuccess: (blob) => downloadBlob(`${huntId}.pdf`, blob),
-  })
+  });
 
-  if (report.isLoading)
-    return <p className="meta-text">Loading the report…</p>
+  if (report.isLoading) return <p className="meta-text">Loading the report…</p>;
 
   if (report.error) {
     return (
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <EmptyState title="Report unavailable">
-          This hunt did not produce a report: it may still be running, or it was interrupted
-          before its conclusion (for example by a server restart). If it is finished or
-          interrupted, you can resume it: the new investigation will receive its progress
-          rebuilt from the audit log.
+          This hunt did not produce a report: it may still be running, or it was
+          interrupted before its conclusion (for example by a server restart).
+          If it is finished or interrupted, you can resume it: the new
+          investigation will receive its progress rebuilt from the audit log.
         </EmptyState>
         <ResumeCard huntId={huntId} queries={[]} />
       </div>
-    )
+    );
   }
 
-  const data = report.data!
-  const iterations = data.budgets.iterations
-  const siemQueries = data.budgets.siem_queries
-  const duration = data.budgets.duration_seconds
+  const data = report.data!;
+  const iterations = data.budgets.iterations;
+  const siemQueries = data.budgets.siem_queries;
+  const duration = data.budgets.duration_seconds;
   const totalRows = data.executed_queries.reduce(
     (sum, q) => sum + q.source_rows,
     0,
-  )
+  );
   const coverCells: [string, string][] = [
-    ['Analyst', data.analyst],
-    ['Period covered', formatWindow(data.investigation_window)],
+    ["Analyst", data.analyst],
+    ["Period covered", formatWindow(data.investigation_window)],
     [
-      'Sources',
+      "Sources",
       data.sources.length > 0
-        ? data.sources.map(sourceLabel).join(', ')
-        : 'none',
+        ? data.sources.map(sourceLabel).join(", ")
+        : "none",
     ],
-    ['Generated on', formatDate(data.generated_at)],
-  ]
-  const entities = observedEntities(data.findings)
+    ["Generated on", formatDate(data.generated_at)],
+  ];
+  const entities = observedEntities(data.findings);
   const runStats: [string, string][] = [
     [
-      'iterations',
-      iterations ? `${iterations.used} / ${iterations.limit}` : '-',
+      "iterations",
+      iterations ? `${iterations.used} / ${iterations.limit}` : "-",
     ],
     [
-      'SIEM queries',
-      siemQueries ? `${siemQueries.used} / ${siemQueries.limit}` : '-',
+      "SIEM queries",
+      siemQueries ? `${siemQueries.used} / ${siemQueries.limit}` : "-",
     ],
-    ['events read', String(totalRows)],
-    ['findings', String(data.findings.length)],
-    ['duration', duration ? formatDuration(duration.used) : '-'],
-    ['anonymization', anonymizationSummary(data.executed_queries)],
-  ]
+    ["events read", String(totalRows)],
+    ["findings", String(data.findings.length)],
+    ["duration", duration ? formatDuration(duration.used) : "-"],
+    ["anonymization", anonymizationSummary(data.executed_queries)],
+  ];
 
   return (
     <article className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_290px]">
@@ -174,7 +173,7 @@ export function ReportScreen() {
                 onClick={() => exportPdf.mutate()}
                 disabled={exportPdf.isPending}
               >
-                {exportPdf.isPending ? 'Exporting…' : 'Export PDF'}
+                {exportPdf.isPending ? "Exporting…" : "Export PDF"}
               </button>
             </div>
           </div>
@@ -226,13 +225,12 @@ export function ReportScreen() {
               </ul>
             ) : (
               <p className="meta-text mt-3">
-                No MITRE ATT&amp;CK technique was tied to this hunt by the agent.
+                No MITRE ATT&amp;CK technique was tied to this hunt by the
+                agent.
               </p>
             )}
             <div className="mt-4 rounded-[12px] border border-rule border-l-4 border-l-navy px-4 py-3.5">
-              <span className="label mb-1.5 block">
-                Hunt scope
-              </span>
+              <span className="label mb-1.5 block">Hunt scope</span>
               <p className="text-[13px] leading-relaxed text-[#3d4d5c]">
                 {data.attack_overview.scope}
               </p>
@@ -247,7 +245,7 @@ export function ReportScreen() {
               <span className="meta-mono uppercase">
                 {data.playbook.validated_by
                   ? `validated by ${data.playbook.validated_by} · ${data.playbook.validated_queries} queries / ${data.playbook.validated_iterations} iterations`
-                  : 'not validated'}
+                  : "not validated"}
               </span>
             </div>
             <p className="px-5 pt-4 text-sm leading-relaxed text-[#243544]">
@@ -293,7 +291,7 @@ export function ReportScreen() {
                       </td>
                       <td className="px-3 py-2">
                         <Mono className="text-[11px] text-slate">
-                          {step.technique ?? ''}
+                          {step.technique ?? ""}
                         </Mono>
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -307,8 +305,8 @@ export function ReportScreen() {
               </table>
             </div>
             <p className="meta-mono px-5 pb-2 uppercase">
-              Estimate {data.playbook.estimated_queries} queries /{' '}
-              {data.playbook.estimated_iterations} iterations · executed{' '}
+              Estimate {data.playbook.estimated_queries} queries /{" "}
+              {data.playbook.estimated_iterations} iterations · executed{" "}
               {data.executed_queries.length} query(ies)
             </p>
             <div className="mx-5 mb-5 rounded-[10px] border border-[#e3e8ed] bg-soft-bg px-4 py-3.5">
@@ -326,7 +324,7 @@ export function ReportScreen() {
           <div className="mb-4">
             <TruncationNotice>
               Partial report: the hunt was interrupted (
-              {data.interruption_reason ?? 'reason not specified'}).
+              {data.interruption_reason ?? "reason not specified"}).
             </TruncationNotice>
           </div>
         ) : null}
@@ -343,7 +341,7 @@ export function ReportScreen() {
             </h2>
             <VerdictBadge verdict={data.proposed_verdict} />
             <span className="meta-mono uppercase">
-              {data.human_decision ? 'validated' : 'not validated'}
+              {data.human_decision ? "validated" : "not validated"}
             </span>
           </div>
           <p className="mt-3.5 whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
@@ -374,7 +372,7 @@ export function ReportScreen() {
                 <div className="flex flex-wrap items-center gap-3">
                   <VerdictBadge verdict={data.human_decision.verdict} />
                   <span className="meta-mono uppercase">
-                    Verdict validated by {data.human_decision.decided_by} ·{' '}
+                    Verdict validated by {data.human_decision.decided_by} ·{" "}
                     {formatDate(data.human_decision.decided_at)}
                   </span>
                 </div>
@@ -388,8 +386,8 @@ export function ReportScreen() {
               <>
                 <fieldset>
                   <legend className="meta-text mb-2.5">
-                    You confirm, correct or overturn the agent&apos;s proposal. Your
-                    decision is timestamped and attributed to you.
+                    You confirm, correct or overturn the agent&apos;s proposal.
+                    Your decision is timestamped and attributed to you.
                   </legend>
                   <div className="flex flex-wrap gap-2">
                     {VERDICTS.map((option) => (
@@ -398,8 +396,8 @@ export function ReportScreen() {
                         className={`cursor-pointer rounded-btn border px-3.5 py-2 text-xs
                         font-medium transition-colors ${
                           verdict === option.value
-                            ? 'border-navy bg-navy text-white'
-                            : 'border-field-border text-slate hover:bg-soft-bg'
+                            ? "border-navy bg-navy text-white"
+                            : "border-field-border text-slate hover:bg-soft-bg"
                         }`}
                       >
                         <input
@@ -429,7 +427,7 @@ export function ReportScreen() {
                       message={
                         decide.error instanceof ApiError
                           ? decide.error.message
-                          : 'The decision could not be recorded.'
+                          : "The decision could not be recorded."
                       }
                     />
                   </div>
@@ -454,7 +452,7 @@ export function ReportScreen() {
 
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-[15px] font-semibold text-ink">
-            Findings{' '}
+            Findings{" "}
             <span className="meta-mono font-normal">
               {data.findings.length}
             </span>
@@ -506,10 +504,10 @@ export function ReportScreen() {
                 </ul>
               ) : null}
               <p className="meta-mono mt-3 border-t border-rule-soft pt-2.5 uppercase">
-                Evidence ·{' '}
+                Evidence ·{" "}
                 {finding.evidence_query_ids.map((id, index) => (
                   <span key={id}>
-                    {index > 0 ? ' · ' : ''}
+                    {index > 0 ? " · " : ""}
                     <a href={`#${id}`} className="text-indigo hover:underline">
                       {id}
                     </a>
@@ -588,7 +586,7 @@ export function ReportScreen() {
               </h2>
               <span className="meta-mono uppercase">
                 {data.executed_queries.length} query(ies)
-                {duration ? ` · duration ${formatDuration(duration.used)}` : ''}
+                {duration ? ` · duration ${formatDuration(duration.used)}` : ""}
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -648,7 +646,7 @@ export function ReportScreen() {
                       <td className="px-5 py-2 text-right">
                         <Mono className="text-[11px] font-medium">
                           {query.returned_rows}
-                          {query.truncated ? ' ⚠' : ''}
+                          {query.truncated ? " ⚠" : ""}
                         </Mono>
                       </td>
                     </tr>
@@ -696,7 +694,7 @@ export function ReportScreen() {
                   </Mono>
                   <span className="meta-mono uppercase">{ioc.type}</span>
                   <span className="meta-mono uppercase">{ioc.status}</span>
-                  {ioc.source_url.startsWith('internal://') ? (
+                  {ioc.source_url.startsWith("internal://") ? (
                     <span className="meta-text">{ioc.source}</span>
                   ) : (
                     <a
@@ -750,19 +748,23 @@ export function ReportScreen() {
                 />
                 {query.truncated ? (
                   <TruncationNotice>
-                    {query.source_rows} rows returned by the source, cap reached: the
-                    result is not exhaustive. The model received {query.returned_rows}
-                    {query.source_rows > query.returned_rows ? ' (with aggregates)' : ''}.
+                    {query.source_rows} rows returned by the source, cap
+                    reached: the result is not exhaustive. The model received{" "}
+                    {query.returned_rows}
+                    {query.source_rows > query.returned_rows
+                      ? " (with aggregates)"
+                      : ""}
+                    .
                   </TruncationNotice>
                 ) : null}
                 <button
                   type="button"
                   className="text-xs text-indigo hover:underline print:hidden"
                   onClick={() => {
-                    setResumeFrom(query.query_id)
+                    setResumeFrom(query.query_id);
                     document
-                      .getElementById('card-resume')
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      .getElementById("card-resume")
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
                   }}
                 >
                   Resume the investigation from here →
@@ -816,7 +818,7 @@ export function ReportScreen() {
         </div>
       </aside>
     </article>
-  )
+  );
 }
 
 function ResumeCard({
@@ -824,26 +826,30 @@ function ResumeCard({
   queries,
   prefillFromQuery = null,
 }: {
-  huntId: string
-  queries: ExecutedQuery[]
-  prefillFromQuery?: string | null
+  huntId: string;
+  queries: ExecutedQuery[];
+  prefillFromQuery?: string | null;
 }) {
-  const navigate = useNavigate()
-  const [instruction, setInstruction] = useState('')
-  const [fromQuery, setFromQuery] = useState('')
+  const navigate = useNavigate();
+  const [instruction, setInstruction] = useState("");
+  const [fromQuery, setFromQuery] = useState("");
 
   useEffect(() => {
-    if (prefillFromQuery) setFromQuery(prefillFromQuery)
-  }, [prefillFromQuery])
+    if (prefillFromQuery) setFromQuery(prefillFromQuery);
+  }, [prefillFromQuery]);
   const options = useQuery({
-    queryKey: ['resume-options', huntId],
+    queryKey: ["resume-options", huntId],
     queryFn: () => api.resumeOptions(huntId),
-  })
+  });
 
   const continueInPlace = useMutation({
-    mutationFn: () => api.continueHunt(huntId),
+    mutationFn: () =>
+      api.continueHunt(
+        huntId,
+        instruction.trim() ? { instruction: instruction.trim() } : {},
+      ),
     onSuccess: () => navigate(`/hunts/${huntId}/feed`),
-  })
+  });
 
   const resume = useMutation({
     mutationFn: () =>
@@ -852,17 +858,25 @@ function ResumeCard({
         ...(fromQuery ? { from_query_id: fromQuery } : {}),
       }),
     onSuccess: (created) => navigate(`/hunts/${created.hunt_id}/playbook`),
-  })
+  });
 
   return (
     <div className="card p-3.5" id="card-resume">
       <div className="label mb-2">Resume this hunt</div>
+      <textarea
+        value={instruction}
+        onChange={(event) => setInstruction(event.target.value)}
+        rows={2}
+        className="field mb-3 text-sm"
+        placeholder="Question or instruction for what follows (optional)"
+        aria-label="Instruction for the resume"
+      />
       {options.data?.continuable ? (
         <div className="mb-4 border-b border-rule-soft pb-4">
           <p className="meta-text mb-2.5">
-            The interrupted loop has been saved: the agent can continue where it left off,
-            with its remaining budgets. If they are exhausted, it will ask you for an
-            extension in the thread.
+            {options.data?.status === "awaiting_review"
+              ? "Same investigation: the agent starts again from its memory, its queries and its findings, with your instruction, and will conclude again. This report will be replaced; the previous one stays in the audit trail. Once the verdict is validated, the hunt is frozen."
+              : "Same investigation: the agent starts again from its memory, its queries and its findings, with your instruction and its remaining budgets. If they are exhausted, it will ask you for an extension in the feed."}
           </p>
           <button
             type="button"
@@ -870,29 +884,25 @@ function ResumeCard({
             onClick={() => continueInPlace.mutate()}
             disabled={continueInPlace.isPending}
           >
-            {continueInPlace.isPending ? 'Resuming…' : 'Continue where it left off'}
+            {continueInPlace.isPending
+              ? "Resuming…"
+              : "Continue the same investigation"}
           </button>
           {continueInPlace.error ? (
             <p className="mt-2 text-sm text-garnet">
               {continueInPlace.error instanceof ApiError
                 ? continueInPlace.error.message
-                : 'Cannot resume.'}
+                : "Cannot resume."}
             </p>
           ) : null}
         </div>
       ) : null}
       <p className="meta-text mb-3">
-        {options.data?.continuable ? 'Or start over in a n' : 'N'}ew investigation that
-        inherits the validated indicators and the hunt&apos;s progress. This report stays unchanged.
+        {options.data?.continuable ? "Or start over in a n" : "N"}ew linked
+        investigation, with a new hunt and a new report: it inherits the
+        validated indicators and this hunt&apos;s progress, and goes through the
+        playbook again. This report stays unchanged.
       </p>
-      <textarea
-        value={instruction}
-        onChange={(event) => setInstruction(event.target.value)}
-        rows={2}
-        className="field mb-2.5 text-sm"
-        placeholder="Question or instruction (optional)"
-        aria-label="Instruction for the resume"
-      />
       <label className="mb-3 block text-xs text-slate">
         Resume after
         <select
@@ -914,128 +924,131 @@ function ResumeCard({
         onClick={() => resume.mutate()}
         disabled={resume.isPending}
       >
-        {resume.isPending ? 'Creating…' : 'Resume (playbook to validate)'}
+        {resume.isPending
+          ? "Creating…"
+          : "New linked investigation (playbook to validate)"}
       </button>
       {resume.error ? (
         <p className="mt-2 text-sm text-garnet">
-          {resume.error instanceof ApiError ? resume.error.message : 'Cannot resume.'}
+          {resume.error instanceof ApiError
+            ? resume.error.message
+            : "Cannot resume."}
         </p>
       ) : null}
     </div>
-  )
+  );
 }
 
 function formatDate(value: string): string {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleString('en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 function formatWindow(window: string | null): string {
-  if (!window) return 'default window'
-  const ends = window.split('->').map((part) => part.trim())
-  if (ends.length !== 2) return window
+  if (!window) return "default window";
+  const ends = window.split("->").map((part) => part.trim());
+  if (ends.length !== 2) return window;
   const render = (value: string) => {
-    const parsed = new Date(value)
+    const parsed = new Date(value);
     return Number.isNaN(parsed.getTime())
       ? value
-      : parsed.toLocaleDateString('en-GB')
-  }
-  return `${render(ends[0])} → ${render(ends[1])}`
+      : parsed.toLocaleDateString("en-GB");
+  };
+  return `${render(ends[0])} → ${render(ends[1])}`;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
-  sentinel: 'Sentinel',
-  defender: 'Defender',
-  secops: 'SecOps',
-}
+  sentinel: "Sentinel",
+  defender: "Defender",
+  secops: "SecOps",
+};
 
 function sourceLabel(source: string): string {
-  return SOURCE_LABELS[source] ?? source
+  return SOURCE_LABELS[source] ?? source;
 }
 
 function formatTime(value: string): string {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleTimeString('en-GB')
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleTimeString("en-GB");
 }
 
 function firstLine(query: string): string {
   return (
     query
-      .split('\n')
+      .split("\n")
       .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? ''
-  )
+      .find((line) => line.length > 0) ?? ""
+  );
 }
 
 interface ObservedEntity {
-  key: string
-  type: string
-  value: string
-  findings: Finding[]
+  key: string;
+  type: string;
+  value: string;
+  findings: Finding[];
 }
 
 function observedEntities(findings: Finding[]): ObservedEntity[] {
-  const seen = new Map<string, ObservedEntity>()
+  const seen = new Map<string, ObservedEntity>();
   for (const finding of findings) {
     for (const entity of finding.entities) {
-      const key = `${entity.type.toLowerCase()}:${entity.value}`
-      const entry = seen.get(key)
+      const key = `${entity.type.toLowerCase()}:${entity.value}`;
+      const entry = seen.get(key);
       if (entry) {
-        entry.findings.push(finding)
+        entry.findings.push(finding);
       } else {
         seen.set(key, {
           key,
           type: entity.type,
           value: entity.value,
           findings: [finding],
-        })
+        });
       }
     }
   }
   return [...seen.values()].sort(
     (a, b) => b.findings.length - a.findings.length,
-  )
+  );
 }
 
 function anonymizationSummary(queries: ExecutedQuery[]): string {
   const traced = queries
     .map((query) => query.anonymization)
     .filter(
-      (info): info is AnonymizationInfo => info !== null && 'tokens' in info,
-    )
-  if (traced.length === 0) return 'not traced'
-  if (traced.some((info) => !info.tokenization))
-    return 'tokenization disabled'
-  const degraded = traced.filter((info) => info.semantic === 'degraded').length
-  const disabled = traced.filter((info) => info.semantic === 'disabled').length
-  if (degraded > 0) return `semantic degraded ${degraded}/${traced.length}`
-  if (disabled === traced.length) return 'deterministic only'
-  return `semantic active ${traced.length - disabled}/${traced.length}`
+      (info): info is AnonymizationInfo => info !== null && "tokens" in info,
+    );
+  if (traced.length === 0) return "not traced";
+  if (traced.some((info) => !info.tokenization)) return "tokenization disabled";
+  const degraded = traced.filter((info) => info.semantic === "degraded").length;
+  const disabled = traced.filter((info) => info.semantic === "disabled").length;
+  if (degraded > 0) return `semantic degraded ${degraded}/${traced.length}`;
+  if (disabled === traced.length) return "deterministic only";
+  return `semantic active ${traced.length - disabled}/${traced.length}`;
 }
 
 function formatDuration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60)
-  const rest = Math.round(seconds % 60)
-  return minutes > 0 ? `${minutes} min ${rest} s` : `${rest} s`
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return minutes > 0 ? `${minutes} min ${rest} s` : `${rest} s`;
 }
 
 function downloadText(filename: string, content: string): void {
   downloadBlob(
     filename,
-    new Blob([content], { type: 'text/markdown;charset=utf-8' }),
-  )
+    new Blob([content], { type: "text/markdown;charset=utf-8" }),
+  );
 }
 
 function downloadBlob(filename: string, blob: Blob): void {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

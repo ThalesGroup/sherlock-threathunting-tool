@@ -88,6 +88,17 @@ class StartHuntRequest(BaseModel):
     """Budgets chosen by the analyst. By default, those estimated by the validated playbook."""
 
 
+class ContinueHuntRequest(BaseModel):
+    """Continuation of a hunt where its loop had stopped."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_iterations: int | None = Field(default=None, ge=1, le=100)
+    max_siem_queries: int | None = Field(default=None, ge=1, le=100)
+    instruction: str | None = Field(default=None, max_length=1500)
+    """Question or instruction from the analyst for the rest of the same investigation."""
+
+
 class ResumeHuntRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
