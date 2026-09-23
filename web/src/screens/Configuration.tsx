@@ -57,7 +57,7 @@ export function ConfigurationScreen() {
     <div className="space-y-8">
       <header>
         <h1 className="text-[22px] font-semibold tracking-tight text-ink">Configuration</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate">
+        <p className="mt-1 text-sm text-slate">
           The keys entered here are encrypted server-side and never come back down to the
           browser. Every change is logged. The allowed outbound domains are managed
           server-side, not here.

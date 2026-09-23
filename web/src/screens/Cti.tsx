@@ -87,7 +87,7 @@ export function CtiScreen() {
     <div>
       <header className="mb-5">
         <h1 className="text-[22px] font-semibold tracking-tight text-ink">CTI analysis</h1>
-        <p className="meta-text mt-1 max-w-[72ch]">
+        <p className="meta-text mt-1">
           Import a threat intelligence report (PDF). The agent summarizes the described
           attacks, extracts the published indicators, and checks in threat intel whether
           IOCs exist online - that check is what decides the approach: by indicators when

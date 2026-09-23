@@ -96,7 +96,7 @@ export function NewHuntScreen() {
     <div>
       <header className="mb-5">
         <h1 className="text-[22px] font-semibold tracking-tight text-ink">New hunt</h1>
-        <p className="meta-text mt-1 max-w-[62ch]">
+        <p className="meta-text mt-1">
           Describe a hypothesis or name a campaign. The agent enriches it, queries the
           sources and hands you a report to validate.
         </p>
