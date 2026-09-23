@@ -101,7 +101,7 @@ export function PlaybookScreen() {
           <h1 className="mt-1 text-[21px] font-semibold tracking-tight text-ink">
             The agent&apos;s plan, before any query
           </h1>
-          <p className="mt-1.5 max-w-[70ch] text-sm text-slate">
+          <p className="mt-1.5 text-sm text-slate">
             The agent proposes its leads and estimates the number of queries.
             You validate, adjust the budgets or rephrase. No query goes to a
             SIEM before you launch.{' '}
@@ -275,7 +275,7 @@ function PlaybookBody({ playbook }: { playbook: Playbook }) {
             {formatDate(playbook.generated_at)}
           </span>
         </div>
-        <p className="max-w-[190ch] whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
           {playbook.summary}
         </p>
         {playbook.instruction ? (

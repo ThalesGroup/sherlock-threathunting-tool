@@ -137,7 +137,7 @@ export function ReportScreen() {
               <p className="meta-mono uppercase tracking-[0.22em]">
                 Investigation report · Threat hunting
               </p>
-              <h1 className="mt-2 max-w-[46ch] text-[21px] font-semibold leading-snug tracking-tight text-navy">
+              <h1 className="mt-2 text-[21px] font-semibold leading-snug tracking-tight text-navy">
                 {data.hypothesis}
               </h1>
               <div className="mt-3 flex flex-wrap items-center gap-2.5">
@@ -200,7 +200,7 @@ export function ReportScreen() {
                 Hunt hypothesis · MITRE ATT&amp;CK
               </span>
             </div>
-            <p className="max-w-[78ch] whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
               {data.attack_overview.description}
             </p>
             {data.attack_overview.techniques.length > 0 ? (
@@ -346,7 +346,7 @@ export function ReportScreen() {
               {data.human_decision ? 'validated' : 'not validated'}
             </span>
           </div>
-          <p className="mt-3.5 max-w-[88ch] whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
+          <p className="mt-3.5 whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
             {data.summary}
           </p>
 
@@ -485,7 +485,7 @@ export function ReportScreen() {
                   <ConfidenceLabel confidence={finding.confidence} />
                 </span>
               </div>
-              <p className="mt-2.5 max-w-[92ch] whitespace-pre-wrap text-[13px] leading-relaxed text-[#3d4d5c]">
+              <p className="mt-2.5 whitespace-pre-wrap text-[13px] leading-relaxed text-[#3d4d5c]">
                 {finding.description}
               </p>
               {finding.entities.length > 0 ? (
