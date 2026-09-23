@@ -29,7 +29,7 @@ function crumbFor(pathname: string): [string, string] {
       return [label, huntId ? huntId.toUpperCase() : meta]
     }
   }
-  return ['Threat hunting', '']
+  return ['SHERLOCK', '']
 }
 
 export function AppShell() {
@@ -80,13 +80,22 @@ export function AppShell() {
       </a>
 
       <aside className="sticky top-0 flex h-screen w-[228px] flex-none flex-col bg-navy text-white">
-        <div className="border-b border-[#1c3350] px-5 pb-5 pt-6">
-          <div className="flex items-center gap-2.5">
-            <div className="h-[11px] w-[11px] rounded-[3px] bg-accent" aria-hidden="true" />
-            <span className="text-[15px] font-semibold tracking-tight">Threat hunting</span>
-          </div>
-          <div className="mt-2 pl-[21px] font-mono text-[10px] tracking-[0.16em] text-[#5f7791]">
-            INTERNAL SOC
+        <div className="border-b border-[#1c3350] px-5 pb-4 pt-5">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo_sherlock_mark.png"
+              alt=""
+              aria-hidden="true"
+              className="h-11 w-11 flex-none object-contain"
+            />
+            <div>
+              <div className="text-[17px] font-semibold uppercase leading-none tracking-[0.08em]">
+                Sherlock
+              </div>
+              <div className="mt-1.5 font-mono text-[10px] tracking-[0.16em] text-[#5f7791]">
+                THREAT HUNTING
+              </div>
+            </div>
           </div>
         </div>
 
