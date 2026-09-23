@@ -64,7 +64,11 @@ export function HuntLiveScreen() {
         </header>
 
         {budgetPause && !stream.finished ? (
-          <BudgetCheckpoint huntId={huntId} budget={String(budgetPause.payload.budget ?? '')} />
+          <BudgetCheckpoint
+            key={stream.events.indexOf(budgetPause)}
+            huntId={huntId}
+            budget={String(budgetPause.payload.budget ?? '')}
+          />
         ) : null}
 
         {stream.error ? <ErrorNotice message={stream.error} /> : null}
