@@ -124,13 +124,17 @@ class TestMinimization:
 
     def test_secret_pattern_inside_free_text_is_redacted(self):
         result = minimize(
-            [{"CommandLine": "powershell -c $p='x'; net use /user:adm password=Sup3rS3cret"}],
+            [{"CommandLine": "powershell -c $p='x'; net use /user:svc password=FAKE-TEST-SECRET"}],
             settings=self._settings(),
         )
-        assert "Sup3rS3cret" not in result.rows[0]["CommandLine"]
+        assert "FAKE-TEST-SECRET" not in result.rows[0]["CommandLine"]
 
     def test_jwt_is_redacted(self):
-        token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghij"
+        token = (
+            "eyJhbGciOiJub25lIiwiZmFrZSI6dHJ1ZX0"
+            ".eyJzdWIiOiJGQUtFLVRFU1QtVE9LRU4ifQ"
+            ".FAKE-SIGNATURE-NOT-A-SECRET"
+        )
         result = minimize([{"Raw": token}], settings=self._settings())
         assert token not in result.rows[0]["Raw"]
 
