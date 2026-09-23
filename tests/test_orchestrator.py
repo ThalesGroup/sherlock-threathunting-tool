@@ -347,6 +347,31 @@ class TestBudgetCheckpoint:
             for e in sink.events
         )
 
+    async def test_token_exhaustion_pauses_and_an_extension_resumes(self):
+        import asyncio
+
+        orchestrator, dossier, stream, sink, budget = build(
+            self._looping(1),
+            budgets=Budgets(max_iterations=99, max_siem_queries=99, max_tokens=120),
+            budget_pause_timeout=5.0,
+        )
+
+        async def analyst():
+            for _ in range(200):
+                await asyncio.sleep(0.01)
+                if orchestrator.awaiting_budget_decision:
+                    budget.extend(extra_tokens=10_000)
+                    orchestrator.resolve_budget(extend=True)
+                    return
+            raise AssertionError("the token checkpoint was never reached")
+
+        outcome, _ = await asyncio.gather(orchestrator.run(), analyst())
+
+        assert outcome.interrupted is False, outcome.reason
+        paused = [e for e in stream.history if e.type is HuntEventType.BUDGET_PAUSED]
+        assert paused and paused[0].payload["budget"] == "tokens"
+        assert budget.limits.max_tokens >= 10_120
+
     async def test_stop_decision_produces_a_partial_report(self):
         import asyncio
 

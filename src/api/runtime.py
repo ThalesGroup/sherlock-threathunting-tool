@@ -930,8 +930,7 @@ class HuntRuntime:
                 ErrorCode.IOC_NOT_VALIDATED,
                 f"{pending} indicator(s) awaiting the analyst's validation.",
                 hint=(
-                    "Return to the \"Indicators\" screen to validate or reject them, "
-                    "then relaunch."
+                    'Return to the "Indicators" screen to validate or reject them, then relaunch.'
                 ),
             )
         playbook = hunt.dossier.playbook
@@ -1007,6 +1006,7 @@ class HuntRuntime:
                     "elapsed_seconds": budget.elapsed_seconds,
                     "max_iterations": budget.limits.max_iterations,
                     "max_siem_queries": budget.limits.max_siem_queries,
+                    "max_tokens": budget.limits.max_tokens,
                 },
                 "records": [record_to_payload(record) for record in hunt.dossier.ledger.as_list()],
                 "findings": [finding.model_dump(mode="json") for finding in hunt.dossier.findings],
@@ -1067,7 +1067,7 @@ class HuntRuntime:
                 max_siem_queries or saved_budget.get("max_siem_queries") or limits.max_siem_queries,
                 PLATFORM_CAP,
             ),
-            max_tokens=limits.max_tokens,
+            max_tokens=max(limits.max_tokens, int(saved_budget.get("max_tokens") or 0)),
             max_duration_seconds=limits.max_duration_seconds,
             token_alert_ratio=limits.token_alert_ratio,
         )
@@ -1148,6 +1148,7 @@ class HuntRuntime:
         extra_siem_queries: int,
         extra_minutes: int,
         actor: str,
+        extra_tokens: int = 0,
     ) -> dict[str, Any]:
         """The analyst's decision at the budget checkpoint: continue with an extension, or
         stop cleanly. Logged and attributed, like any human validation."""
@@ -1163,6 +1164,7 @@ class HuntRuntime:
                 extra_iterations=extra_iterations,
                 extra_siem_queries=extra_siem_queries,
                 extra_minutes=extra_minutes,
+                extra_tokens=extra_tokens,
             )
         hunt.orchestrator.resolve_budget(extend=extend)
         await hunt.journal.record(
@@ -1173,6 +1175,7 @@ class HuntRuntime:
                 "extra_iterations": extra_iterations if extend else 0,
                 "extra_siem_queries": extra_siem_queries if extend else 0,
                 "extra_minutes": extra_minutes if extend else 0,
+                "extra_tokens": extra_tokens if extend else 0,
             },
         )
         return {
@@ -1290,7 +1293,7 @@ class HuntRuntime:
             raise ToolError(
                 ErrorCode.SCHEMA_INVALID,
                 "The Workspace ID is a GUID (Log Analytics workspace overview, "
-                "\"Workspace ID\" field), not the name or the resource identifier.",
+                '"Workspace ID" field), not the name or the resource identifier.',
             )
         secrets.set(key, value.strip(), actor=actor)
         await self._audit_config(
@@ -1376,7 +1379,7 @@ class HuntRuntime:
                 workspace = [by_name.get(name, False) for name in _WORKSPACE_FIELDS]
                 if all(workspace):
                     return True, (
-                        "Workspace entered but not yet resolved: run \"Test the connection\"."
+                        'Workspace entered but not yet resolved: run "Test the connection".'
                     )
                 if any(workspace):
                     return True, (
@@ -1525,7 +1528,7 @@ class HuntRuntime:
                             except ToolError as error:
                                 raise ToolError(
                                     error.code,
-                                    f"Token obtained, but the workspace \"{alias}\" responds: "
+                                    f'Token obtained, but the workspace "{alias}" responds: '
                                     f"{error.message}",
                                     hint=error.hint
                                     or (
@@ -1548,9 +1551,7 @@ class HuntRuntime:
             case "secops":
                 raw_key = secrets.get_optional("SECOPS_SA_KEY")
                 if not raw_key:
-                    raise ToolError(
-                        ErrorCode.UNKNOWN_TARGET, "Service account JSON key missing."
-                    )
+                    raise ToolError(ErrorCode.UNKNOWN_TARGET, "Service account JSON key missing.")
                 raw_path = (
                     secrets.get_optional("SECOPS_INSTANCE_PATH") or settings.secops_instance_path
                 )

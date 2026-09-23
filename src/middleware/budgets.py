@@ -14,6 +14,9 @@ from typing import Any
 from middleware.config import Budgets
 from middleware.errors import BudgetExhausted
 
+TOKENS_HARD_CAP = 5_000_000
+"""Absolute token ceiling per hunt, extensions included."""
+
 
 @dataclass
 class HuntBudget:
@@ -38,6 +41,8 @@ class HuntBudget:
 
         if self.elapsed_seconds > self.limits.max_duration_seconds:
             raise BudgetExhausted("duration", self.limits.max_duration_seconds)
+        if self.tokens >= self.limits.max_tokens:
+            raise BudgetExhausted("tokens", self.limits.max_tokens)
 
     def consume_iteration(self) -> None:
         self.check_alive()
@@ -70,16 +75,21 @@ class HuntBudget:
         extra_iterations: int = 0,
         extra_siem_queries: int = 0,
         extra_minutes: int = 0,
+        extra_tokens: int = 0,
     ) -> None:
         """Extension granted by the analyst at the budget checkpoint. The hard caps
-        remain: never more than 100 iterations or 100 queries, and the token budget is not
-        extensible through this path. Extra minutes add to the time already elapsed, not
-        to the initial ceiling: a hunt paused on duration for a long while resumes with
-        that much time ahead instead of pausing again at once."""
+        remain: never more than 100 iterations or 100 queries, nor more than
+        TOKENS_HARD_CAP tokens. Extra minutes add to the time already elapsed, not to
+        the initial ceiling: a hunt paused on duration for a long while resumes with that
+        much time ahead instead of pausing again at once. Same logic for tokens: the
+        supplement adds to the higher of the ceiling and the consumption."""
 
         duration = self.limits.max_duration_seconds
         if extra_minutes > 0:
             duration = max(duration, int(self.elapsed_seconds)) + extra_minutes * 60
+        tokens = self.limits.max_tokens
+        if extra_tokens > 0:
+            tokens = min(TOKENS_HARD_CAP, max(tokens, self.tokens) + extra_tokens)
         self.limits = self.limits.model_copy(
             update={
                 "max_iterations": min(100, self.limits.max_iterations + max(0, extra_iterations)),
@@ -87,6 +97,7 @@ class HuntBudget:
                     100, self.limits.max_siem_queries + max(0, extra_siem_queries)
                 ),
                 "max_duration_seconds": duration,
+                "max_tokens": tokens,
             }
         )
 

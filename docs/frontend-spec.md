@@ -44,7 +44,7 @@ The central screen, where trust in the agent is played out.
 
 The investigation feed occupies the main column: each iteration is added at the bottom, live. One card per step, containing the objective the agent gave to the query, the generated query (in monospace, on a distinct background, collapsible), the queried SIEM, the number of returned rows, a sample of the rows behind an expand arrow (ten at most, the real total recalled in the label) with two views - a rehydrated "analyst view" and "transmitted to the model" with the pseudonyms in place - and an anonymization-proof line (pseudonyms placed by family, state of the semantic pass, masked fields), the truncation note where applicable, and the agent's reasoning that follows ("I pivot to this host", "no signal, I change angle").
 
-In the side column: the state of the budgets (iterations consumed, SIEM queries, elapsed time), the entities encountered, and the findings already recorded. A stop button lets the analyst interrupt the hunt at any time; the interruption produces a partial report, never a blank screen.
+In the side column: the state of the budgets (iterations consumed, SIEM queries, tokens, elapsed time), the entities encountered, and the findings already recorded. Whenever a budget runs out, whichever it is (iterations, queries, tokens, duration), the feed shows the budget checkpoint: continue with a supplement (iterations, queries, tokens; granted minutes count from the time already elapsed) or stop with a partial report. A stop button lets the analyst interrupt the hunt at any time; the interruption produces a partial report, never a blank screen.
 
 ### 6. Report
 
