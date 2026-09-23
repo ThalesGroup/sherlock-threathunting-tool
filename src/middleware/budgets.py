@@ -73,16 +73,20 @@ class HuntBudget:
     ) -> None:
         """Extension granted by the analyst at the budget checkpoint. The hard caps
         remain: never more than 100 iterations or 100 queries, and the token budget is not
-        extensible through this path."""
+        extensible through this path. Extra minutes add to the time already elapsed, not
+        to the initial ceiling: a hunt paused on duration for a long while resumes with
+        that much time ahead instead of pausing again at once."""
 
+        duration = self.limits.max_duration_seconds
+        if extra_minutes > 0:
+            duration = max(duration, int(self.elapsed_seconds)) + extra_minutes * 60
         self.limits = self.limits.model_copy(
             update={
                 "max_iterations": min(100, self.limits.max_iterations + max(0, extra_iterations)),
                 "max_siem_queries": min(
                     100, self.limits.max_siem_queries + max(0, extra_siem_queries)
                 ),
-                "max_duration_seconds": self.limits.max_duration_seconds
-                + max(0, extra_minutes) * 60,
+                "max_duration_seconds": duration,
             }
         )
 
