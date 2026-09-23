@@ -1,0 +1,14 @@
+# Secret scanner configuration. The test suite deliberately contains fake
+# credentials (passwords, API keys, a JWT) to verify that the masking layer
+# removes them before anything reaches the model. They are all prefixed FAKE-.
+title = "SHERLOCK"
+
+[allowlist]
+description = "Test fixtures that exercise secret masking; never real credentials"
+paths = [
+  "tests/.*",
+  "web/src/.*\\.test\\.ts",
+]
+regexes = [
+  "FAKE-[A-Z0-9-]+",
+]

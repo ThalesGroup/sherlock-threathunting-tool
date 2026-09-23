@@ -472,7 +472,7 @@ class TestBraveProvider:
 
     def _brave_source(self, handler):
         return WebReportSource(
-            search_api_key="brave-key",
+            search_api_key="FAKE-BRAVE-KEY",
             search_engine_id="",
             publisher_domains=(),
             gateway=FakeGateway(EXTRACTION),
@@ -487,7 +487,7 @@ class TestBraveProvider:
         iocs = await self._brave_source(self._handler(fetched, tokens)).search("Ousaban", limit=20)
 
         assert fetched == ["https://blog-niche.example/ousaban-report"]
-        assert tokens == ["brave-key"]
+        assert tokens == ["FAKE-BRAVE-KEY"]
         assert any(ioc.value == "evil-c2.example" for ioc in iocs)
 
     def test_unknown_provider_is_rejected(self):
@@ -526,7 +526,7 @@ class TestTavilyProvider:
     async def test_tavily_results_are_fetched_https_only(self):
         fetched, auth = [], []
         source = WebReportSource(
-            search_api_key="tvly-key",
+            search_api_key="FAKE-TAVILY-KEY",
             search_engine_id="",
             publisher_domains=(),
             gateway=FakeGateway(EXTRACTION),
@@ -538,7 +538,7 @@ class TestTavilyProvider:
         iocs = await source.search("Ousaban", limit=20)
 
         assert fetched == ["https://blog-niche.example/ousaban-report"]
-        assert auth == ["Bearer tvly-key"]
+        assert auth == ["Bearer FAKE-TAVILY-KEY"]
         assert any(ioc.value == "evil-c2.example" for ioc in iocs)
 
     async def test_trusted_sweep_runs_first_when_publishers_are_configured(self):
@@ -570,7 +570,7 @@ class TestTavilyProvider:
             return httpx.Response(200, text=PAGE_HTML)
 
         source = WebReportSource(
-            search_api_key="tvly-key",
+            search_api_key="FAKE-TAVILY-KEY",
             search_engine_id="",
             publisher_domains=("publisher.example",),
             gateway=FakeGateway(EXTRACTION),
@@ -621,7 +621,7 @@ class TestTavilyProvider:
             return httpx.Response(200, text=PAGE_HTML)
 
         source = WebReportSource(
-            search_api_key="tvly-key",
+            search_api_key="FAKE-TAVILY-KEY",
             search_engine_id="",
             publisher_domains=("publisher.example",),
             gateway=FakeGateway(EXTRACTION),
@@ -647,7 +647,7 @@ class TestTavilyProvider:
             return httpx.Response(200, text=PAGE_HTML)
 
         source = WebReportSource(
-            search_api_key="tvly-key",
+            search_api_key="FAKE-TAVILY-KEY",
             search_engine_id="",
             publisher_domains=(),
             gateway=gateway,
@@ -687,7 +687,7 @@ class TestTavilyProvider:
 
         gateway = FakeGateway(EXTRACTION)
         source = WebReportSource(
-            search_api_key="tvly-key",
+            search_api_key="FAKE-TAVILY-KEY",
             search_engine_id="",
             publisher_domains=(),
             gateway=gateway,
@@ -773,7 +773,7 @@ class TestFreshnessFilter:
             return httpx.Response(200, text=PAGE_HTML)
 
         source = WebReportSource(
-            search_api_key="tvly-key",
+            search_api_key="FAKE-TAVILY-KEY",
             search_engine_id="",
             publisher_domains=(),
             gateway=FakeGateway("[]"),
