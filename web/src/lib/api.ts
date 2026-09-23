@@ -516,6 +516,7 @@ export const api = {
       extra_iterations?: number
       extra_siem_queries?: number
       extra_minutes?: number
+      extra_tokens?: number
     },
   ) =>
     request<{ hunt_id: string; extended: boolean }>(

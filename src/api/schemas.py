@@ -45,9 +45,7 @@ class CreateHuntRequest(BaseModel):
         a request without a starting point is rejected before any hunt is created.
         """
         if not self.hypothesis and not self.campaign:
-            raise ValueError(
-                "A hunt starts either from a hypothesis, or from a campaign or actor."
-            )
+            raise ValueError("A hunt starts either from a hypothesis, or from a campaign or actor.")
         return self
 
     @model_validator(mode="after")
@@ -156,11 +154,15 @@ class BudgetDecisionRequest(BaseModel):
     extra_iterations: int = Field(default=0, ge=0, le=100)
     extra_siem_queries: int = Field(default=0, ge=0, le=100)
     extra_minutes: int = Field(default=0, ge=0, le=60)
+    extra_tokens: int = Field(default=0, ge=0, le=2_000_000)
 
     @model_validator(mode="after")
     def _extension_is_not_empty(self) -> BudgetDecisionRequest:
         if self.action == "extend" and not (
-            self.extra_iterations or self.extra_siem_queries or self.extra_minutes
+            self.extra_iterations
+            or self.extra_siem_queries
+            or self.extra_minutes
+            or self.extra_tokens
         ):
             raise ValueError("An extension must grant at least one supplement.")
         return self

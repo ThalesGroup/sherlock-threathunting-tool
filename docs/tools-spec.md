@@ -117,7 +117,7 @@ The iteration and query budgets are proposed by the agent's playbook (an estimat
 |---|---|
 | Iterations (tool calls) | playbook estimate (server default 20) |
 | SIEM queries | playbook estimate (server default 15) |
-| Tokens | cap defined with the platform team, alert at 80% |
+| Tokens | cap defined with the platform team, alert at 80%; exhaustion pauses at the checkpoint, extensible by the analyst up to 5,000,000 |
 | Duration | 15 minutes |
 
 Overflow: clean stop, generation of a partial report flagging the interruption. Never a silent stop.

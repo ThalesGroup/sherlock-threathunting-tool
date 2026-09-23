@@ -189,7 +189,14 @@ class HuntOrchestrator:
                     messages=self._messages,
                     tools=self._registry.function_schemas(),
                 )
-                self._account_tokens(completion)
+                try:
+                    self._account_tokens(completion)
+                except BudgetExhausted as exhausted:
+                    if not await self._pause_for_budget(exhausted):
+                        interrupted, reason = True, f"budget exhausted ({exhausted.budget})"
+                        break
+                    """Extension granted: the response already received is processed
+                    normally, its tokens are counted, the hunt goes on."""
 
                 if completion.content:
                     self._attach_interpretation(completion.content)
@@ -503,7 +510,7 @@ class HuntOrchestrator:
                 HuntEventType.AGENT_REASONING,
                 text=(
                     "Final review by the analysis model: verdict settled at "
-                    f"\"{result.get('proposed_verdict')}\"."
+                    f'"{result.get("proposed_verdict")}".'
                 ),
             )
 

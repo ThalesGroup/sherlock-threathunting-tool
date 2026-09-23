@@ -680,6 +680,7 @@ async def decide_budget(
             extra_iterations=payload.extra_iterations,
             extra_siem_queries=payload.extra_siem_queries,
             extra_minutes=payload.extra_minutes,
+            extra_tokens=payload.extra_tokens,
             actor=principal.name,
         )
     except ToolError as error:

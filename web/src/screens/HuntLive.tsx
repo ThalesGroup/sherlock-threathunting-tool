@@ -368,6 +368,7 @@ function pendingBudgetPause(events: HuntEvent[]): HuntEvent | null {
 function BudgetCheckpoint({ huntId, budget }: { huntId: string; budget: string }) {
   const [extraIterations, setExtraIterations] = useState(10)
   const [extraQueries, setExtraQueries] = useState(10)
+  const [extraTokens, setExtraTokens] = useState(budget === 'tokens' ? 300_000 : 0)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
@@ -382,6 +383,7 @@ function BudgetCheckpoint({ huntId, budget }: { huntId: string; budget: string }
               extra_iterations: extraIterations,
               extra_siem_queries: extraQueries,
               extra_minutes: 10,
+              extra_tokens: extraTokens,
             }
           : {}),
       })
@@ -431,10 +433,26 @@ function BudgetCheckpoint({ huntId, budget }: { huntId: string; budget: string }
             className="field w-24 font-mono text-sm"
           />
         </label>
+        <label className="text-xs text-ink">
+          <span className="label mb-1 block">+ tokens</span>
+          <input
+            type="number"
+            min={0}
+            max={2000000}
+            step={50000}
+            value={extraTokens}
+            onChange={(event) =>
+              setExtraTokens(Math.min(2_000_000, Math.max(0, Number(event.target.value) || 0)))
+            }
+            className="field w-32 font-mono text-sm"
+          />
+        </label>
         <button
           type="button"
           className="btn-primary"
-          disabled={pending || (extraIterations === 0 && extraQueries === 0)}
+          disabled={
+            pending || (extraIterations === 0 && extraQueries === 0 && extraTokens === 0)
+          }
           onClick={() => void decide('extend')}
         >
           Continue
