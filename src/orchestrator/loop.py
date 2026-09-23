@@ -111,10 +111,20 @@ class HuntOrchestrator:
 
         self._stop_event.set()
 
-    def seed_messages(self, messages: list[dict[str, Any]]) -> None:
-        """In-place resume: start again from the saved transcript instead of the briefing."""
+    def seed_messages(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        instruction: str | None = None,
+        after_conclusion: bool = False,
+    ) -> None:
+        """In-place resume: start again from the saved transcript instead of the briefing,
+        with an optional instruction from the analyst. After a conclusion, the model is
+        told its report was judged insufficient and that it must conclude again."""
 
         self._seeded_messages = list(messages)
+        self._seed_instruction = (instruction or "").strip() or None
+        self._seed_after_conclusion = after_conclusion
 
     def set_state_saver(self, saver: Callable[[list[dict[str, Any]]], Awaitable[None]]) -> None:
         """State persistence callback, called after each iteration. A save failure must
@@ -134,19 +144,30 @@ class HuntOrchestrator:
         seeded = getattr(self, "_seeded_messages", None)
         if seeded:
             self._messages = seeded
-            self._messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        "Resuming the investigation: the loop had been interrupted, the "
-                        "analyst is restarting it. Carry on where you stopped, with the "
-                        "remaining budgets."
-                    ),
-                }
-            )
+            if getattr(self, "_seed_after_conclusion", False):
+                content = (
+                    "Resuming the investigation: the analyst judges the conclusion "
+                    "insufficient and relaunches the same investigation. Start from what "
+                    "you already established, complete what is missing, then conclude "
+                    "again with `conclude_hunt`: the report will be rebuilt."
+                )
+            else:
+                content = (
+                    "Resuming the investigation: the loop had been interrupted, the "
+                    "analyst is restarting it. Carry on where you stopped, with the "
+                    "remaining budgets."
+                )
+            instruction = getattr(self, "_seed_instruction", None)
+            if instruction:
+                safe = self._vault.tokenize_text(instruction) if self._vault else instruction
+                content += f"\n\nAnalyst instruction for what follows: {safe}"
+            self._messages.append({"role": "user", "content": content})
             self._stream.publish(
                 HuntEventType.AGENT_REASONING,
-                text="Resuming the investigation where it had stopped.",
+                text=(
+                    "Resuming the investigation where it had stopped."
+                    + (f" Analyst instruction: {instruction}" if instruction else "")
+                ),
             )
         else:
             self._messages = [

@@ -1250,25 +1250,61 @@ class TestContinueInPlace:
         resumed = await client.post(
             f"/api/hunts/{hunt_id}/continue",
             headers=ANALYST,
-            json={"max_iterations": 20},
+            json={"max_iterations": 20, "instruction": "Focus on persistence."},
         )
         assert resumed.status_code == 200, resumed.text
         hunt = runtime.get(hunt_id)
         assert hunt.budget.iterations >= 1, "consumed counters are preserved"
         await hunt.task
+        seeded = [m for m in hunt.orchestrator._messages if m.get("role") == "user"]
+        assert any(
+            "Analyst instruction for what follows: Focus on" in str(m.get("content"))
+            for m in seeded
+        )
 
         report = (await client.get(f"/api/hunts/{hunt_id}/report", headers=ANALYST)).json()
         assert report["proposed_verdict"] == "suspicious"
         assert report["partial"] is False
-        assert (
-            len(report["executed_queries"]) == 1
-        ), "the query from before the interruption is present"
+        assert len(report["executed_queries"]) == 1, (
+            "the query from before the interruption is present"
+        )
 
         audit = (await client.get(f"/api/hunts/{hunt_id}/audit", headers=ANALYST)).json()
         assert any(entry["type"] == "hunt_continued" for entry in audit)
-        assert await repository.load_hunt_state(hunt_id) is None, "state purged after conclusion"
+        assert await repository.load_hunt_state(hunt_id) is not None, (
+            "the state survives the conclusion until the report is validated"
+        )
+        options = (await client.get(f"/api/hunts/{hunt_id}/resume-options", headers=ANALYST)).json()
+        assert options["continuable"] is True and options["status"] == "awaiting_review"
+
+        runtime._gateway = FakeGateway(SCRIPT)
+        again = await client.post(
+            f"/api/hunts/{hunt_id}/continue",
+            headers=ANALYST,
+            json={"max_iterations": 30, "instruction": "The conclusion misses persistence."},
+        )
+        assert again.status_code == 200, again.text
+        hunt = runtime.get(hunt_id)
+        await hunt.task
+        seeded = [m for m in hunt.orchestrator._messages if m.get("role") == "user"]
+        assert any("judges the conclusion insufficient" in str(m.get("content")) for m in seeded)
+        audit = (await client.get(f"/api/hunts/{hunt_id}/audit", headers=ANALYST)).json()
+        continued = [e for e in audit if e["type"] == "hunt_continued"]
+        assert continued[-1]["detail"]["from"] == "conclusion"
+        assert continued[-1]["detail"]["previous_verdict"] == "suspicious"
+
+        decided = await client.post(
+            f"/api/hunts/{hunt_id}/decision",
+            headers=ANALYST,
+            json={"verdict": "suspicious", "comment": "Validated."},
+        )
+        assert decided.status_code == 200, decided.text
+        assert await repository.load_hunt_state(hunt_id) is None, "state purged at validation"
         options = (await client.get(f"/api/hunts/{hunt_id}/resume-options", headers=ANALYST)).json()
         assert options["continuable"] is False
+        frozen = await client.post(f"/api/hunts/{hunt_id}/continue", headers=ANALYST, json={})
+        assert frozen.status_code == 400
+        assert "frozen" in frozen.json()["detail"]["message"]
 
     async def test_continue_requires_a_saved_state(self, app_context):
         client, runtime, repository = app_context
@@ -1278,6 +1314,7 @@ class TestContinueInPlace:
         await client.post(f"/api/hunts/{hunt_id}/plan", headers=ANALYST)
         await client.post(f"/api/hunts/{hunt_id}/start", headers=ANALYST, json=BUDGETS)
         await runtime.get(hunt_id).task
+        await repository.delete_hunt_state(hunt_id)
 
         response = await client.post(f"/api/hunts/{hunt_id}/continue", headers=ANALYST)
         assert response.status_code == 400
