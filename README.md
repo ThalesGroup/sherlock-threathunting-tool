@@ -44,6 +44,10 @@ non-negotiable guarantees, enforced in code rather than merely prompted:
    playbook, findings tied to the queries that prove them, timeline, execution journal,
    and a proposed verdict the analyst confirms.
 
+<p align="center">
+  <img src="docs/media/sherlock-demo.gif" alt="SHERLOCK: playbook validation, live investigation, report" width="800">
+</p>
+
 An interrupted hunt keeps its execution state and can be **continued where it stopped**,
 or **resumed** as a new linked investigation with a follow-up question.
 
