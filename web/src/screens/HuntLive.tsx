@@ -4,7 +4,7 @@
  */
 
 import { useMutation } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { api, ApiError, type AnonymizationInfo, type Severity } from '@/lib/api'
@@ -46,6 +46,13 @@ export function HuntLiveScreen() {
   const entities = collectEntities(stream.events)
   const budgetPause = pendingBudgetPause(stream.events)
   const iteration = latestIteration(stream.events)
+  const activity = stream.finished || stream.error || budgetPause ? null : currentActivity(stream.events, stream.connected)
+
+  // Follow the thread as it grows: the newest step stays in view.
+  const endRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [stream.events.length, activity])
 
   return (
     <div className="space-y-6">
@@ -90,13 +97,16 @@ export function HuntLiveScreen() {
 
           <ol className="space-y-3">
             {stream.events.map((event) => (
-              <li key={event.sequence}>
+              <li key={event.sequence} className="feed-item">
                 <EventCard event={event} />
               </li>
             ))}
           </ol>
 
           {stream.events.length === 0 && !stream.error ? <p className="muted">Waiting for the first step…</p> : null}
+
+          {activity ? <Activity kind={activity} /> : null}
+          <div ref={endRef} aria-hidden="true" />
         </div>
 
         <aside className="space-y-4">
@@ -289,6 +299,56 @@ function StreamStatus({ connected, finished }: { connected: boolean; finished: b
       {connected ? <IconSpinner size={14} /> : null}
       {connected ? 'live' : 'connecting…'}
     </Chip>
+  )
+}
+
+type ActivityKind = 'connecting' | 'thinking' | { query: string } | 'recording'
+
+/** What the agent is doing right now, read from the tail of the thread: a tool call
+ *  without its result means a query is running, otherwise the model is reasoning. */
+function currentActivity(events: HuntEvent[], connected: boolean): ActivityKind {
+  if (!connected) return 'connecting'
+  const last = events[events.length - 1]
+  if (!last) return 'thinking'
+  if (last.type === 'tool_call') {
+    const tool = String(last.payload.tool ?? '')
+    if (tool === 'record_finding') return 'recording'
+    if (tool === 'conclude_hunt') return 'recording'
+    const source = tool.includes('sentinel') ? 'Sentinel' : tool.includes('defender') ? 'Defender' : tool.includes('secops') ? 'SecOps' : 'the source'
+    return { query: source }
+  }
+  return 'thinking'
+}
+
+function Activity({ kind }: { kind: ActivityKind }) {
+  if (kind === 'connecting') {
+    return (
+      <div className="feed-item activity">
+        <span className="dots-pulse" aria-hidden="true"><i /><i /><i /></span>
+        <span>Connecting to the investigation thread…</span>
+      </div>
+    )
+  }
+  if (typeof kind === 'object') {
+    return (
+      <div className="feed-item activity" role="status">
+        <div className="flex items-center gap-3">
+          <IconSpinner size={16} />
+          <span>
+            Query running on <strong>{kind.query}</strong>, read-only. The result is minimized and pseudonymized before the agent reads it.
+          </span>
+        </div>
+        <div className="bar bar-indeterminate mt-3">
+          <span />
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="feed-item activity" role="status">
+      <span className="dots-pulse" aria-hidden="true"><i /><i /><i /></span>
+      <span>{kind === 'recording' ? 'The agent is writing up what it found…' : 'The agent is reading the result and deciding its next step…'}</span>
+    </div>
   )
 }
 
