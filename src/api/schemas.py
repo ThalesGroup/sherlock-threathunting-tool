@@ -29,6 +29,9 @@ class CreateHuntRequest(BaseModel):
     campaign: str | None = Field(default=None, min_length=2, max_length=120)
     manual_iocs: list[ManualIocInput] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
+    origin: Literal["cti"] | None = None
+    """Where the hunt comes from, when it is not the form itself: `cti` for a hunt
+    launched from an analyzed CTI report. Sets the prefix of the hunt reference."""
     max_iterations: int | None = Field(default=None, ge=1, le=100)
     max_siem_queries: int | None = Field(default=None, ge=1, le=100)
     window_start: str | None = None

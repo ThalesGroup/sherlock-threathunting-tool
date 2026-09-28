@@ -63,9 +63,12 @@ def validate_window(
     start_iso: str,
     end_iso: str,
     *,
-    max_days: int,
+    max_days: int | None,
 ) -> tuple[str, str]:
-    """Check the requested window. The bounds go as API parameters, not in the query."""
+    """Check the requested window. The bounds go as API parameters, not in the query.
+
+    `max_days=None` skips the span cap: the caller bounds the window otherwise (the
+    investigation period set by the analyst)."""
 
     from datetime import datetime
 
@@ -96,7 +99,7 @@ def validate_window(
         )
 
     span_days = (end - start).total_seconds() / 86_400
-    if span_days > max_days:
+    if max_days is not None and span_days > max_days:
         raise ToolError(
             ErrorCode.WINDOW_TOO_LARGE,
             f"Requested window of {span_days:.1f} days, cap {max_days} days.",

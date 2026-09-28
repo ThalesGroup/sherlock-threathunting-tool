@@ -58,7 +58,7 @@ from orchestrator.loop import HuntOrchestrator, HuntOutcome
 from orchestrator.planning import PLATFORM_CAP, propose_playbook
 from reporting.dossier import Dossier
 from reporting.models import Finding, HuntReport, HuntStatus, Playbook
-from storage.repository import HuntRepository
+from storage.repository import HuntRepository, reference_prefix
 from tools.definitions import ToolRegistry, build_enrichment_registry, build_registry
 
 
@@ -335,7 +335,8 @@ class HuntRuntime:
         return hunt_id in self._hunts
 
     async def create(self, request: CreateHuntRequest, *, analyst: str) -> ActiveHunt:
-        hunt_id = f"hunt_{uuid.uuid4().hex[:12]}"
+        prefix = "CTI" if request.origin == "cti" else "CAMP" if request.campaign else "HYP"
+        hunt_id = await self._repository.next_reference(prefix)
         hypothesis = request.hypothesis or (
             f"Investigation into the campaign or actor {request.campaign}."
         )
@@ -829,7 +830,8 @@ class HuntRuntime:
                 except ValueError:
                     window = None
 
-        new_id = f"hunt_{uuid.uuid4().hex[:12]}"
+        # A resumed investigation keeps the origin of its parent: same prefix, new rank.
+        new_id = await self._repository.next_reference(reference_prefix(hunt_id) or "HYP")
         hunt = self._assemble(
             hunt_id=new_id,
             hypothesis=row["hypothesis"],

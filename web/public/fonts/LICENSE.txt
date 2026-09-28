@@ -1,0 +1,3 @@
+Outfit (variable, latin subset) and IBM Plex Mono (400/500/600, latin subset) are
+licensed under the SIL Open Font License 1.1. Copied from the Google Fonts builds so
+that the browser never fetches a CDN: no outbound request from the analyst workstation.

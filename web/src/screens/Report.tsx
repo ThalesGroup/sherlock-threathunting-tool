@@ -1,856 +1,601 @@
 /**
- * Screen 4 - Report.
+ * Investigation report.
  *
- * Reading rule: each finding shows the queries that support it, linked to the
- * corresponding query. A finding that cannot be tied to a query does not exist, and the
- * middleware refuses it upstream.
- *
- * The agent's verdict is presented as a proposal. The validation area is separate, and the
- * decision is timestamped and attributed.
+ * The top of the page is the decision surface: the attack, the findings and the agent's
+ * proposal next to the four verdict tiles. Recommendation, limitations, playbook,
+ * timeline, entities, execution log, indicators, the full queries with their anonymized
+ * samples, the resume options and the exports follow below. A finding that cannot be tied
+ * to a query does not exist; the verdict is a proposal until the analyst records theirs.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { api, ApiError, type AnonymizationInfo, type ExecutedQuery, type Finding, type Verdict } from '@/lib/api'
+
+import { downloadBlob, downloadText, firstLine, formatDate, formatDuration, formatTime, formatWindow, plural, sourceLabel } from '@/components/format'
+import { IconArrowRight, IconArrowUpRight, IconCheck, IconDownload } from '@/components/icons'
 import {
-  ConfidenceLabel,
+  AnonymizationLine,
+  Avatar,
+  Btn,
+  Chip,
+  ConfidenceText,
   EmptyState,
   ErrorNotice,
+  Glass,
+  Inner,
   Mono,
+  Notice,
   QueryBlock,
+  ResultSample,
   SEVERITY_COLORS,
-  SeverityBadge,
+  SeverityMark,
+  Stepper,
+  Tile,
   TruncationNotice,
-  VerdictBadge,
-} from "@/components/primitives";
-import { AnonymizationLine, ResultSample } from "@/components/ResultSample";
-import {
-  api,
-  ApiError,
-  type AnonymizationInfo,
-  type ExecutedQuery,
-  type Finding,
-  type Verdict,
-} from "@/lib/api";
+  VERDICT_COLORS,
+  VERDICT_TITLES,
+  VerdictChip,
+} from '@/components/ui'
 
-const VERDICTS: { value: Verdict; label: string }[] = [
-  { value: "benign", label: "Benign" },
-  { value: "suspicious", label: "Suspicious" },
-  { value: "escalate", label: "To escalate" },
-  { value: "inconclusive", label: "Inconclusive" },
-];
-
-const VERDICT_ACCENTS: Record<Verdict, string> = {
-  benign: "#1f8a5f",
-  suspicious: "#a8560b",
-  escalate: "#8f1d1d",
-  inconclusive: "#5b6b7c",
-};
+const VERDICTS: Verdict[] = ['benign', 'suspicious', 'escalate', 'inconclusive']
 
 export function ReportScreen() {
-  const { huntId = "" } = useParams();
-  const queryClient = useQueryClient();
-  const report = useQuery({
-    queryKey: ["report", huntId],
-    queryFn: () => api.report(huntId),
-  });
+  const { huntId = '' } = useParams()
+  const queryClient = useQueryClient()
+  const report = useQuery({ queryKey: ['report', huntId], queryFn: () => api.report(huntId) })
 
-  const [verdict, setVerdict] = useState<Verdict | null>(null);
-  const [resumeFrom, setResumeFrom] = useState<string | null>(null);
-  const [comment, setComment] = useState("");
+  const [verdict, setVerdict] = useState<Verdict | null>(null)
+  const [comment, setComment] = useState('')
+  const [resumeFrom, setResumeFrom] = useState<string | null>(null)
 
   const decide = useMutation({
     mutationFn: () => api.decide(huntId, verdict!, comment.trim() || null),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["report", huntId] }),
-  });
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['report', huntId] })
+      void queryClient.invalidateQueries({ queryKey: ['hunts'] })
+    },
+  })
+  const exportMarkdown = useMutation({ mutationFn: () => api.reportMarkdown(huntId), onSuccess: (markdown) => downloadText(`${huntId}.md`, markdown) })
+  const exportPdf = useMutation({ mutationFn: () => api.reportPdf(huntId), onSuccess: (blob) => downloadBlob(`${huntId}.pdf`, blob) })
 
-  const exportMarkdown = useMutation({
-    mutationFn: () => api.reportMarkdown(huntId),
-    onSuccess: (markdown) => downloadText(`${huntId}.md`, markdown),
-  });
-
-  const exportPdf = useMutation({
-    mutationFn: () => api.reportPdf(huntId),
-    onSuccess: (blob) => downloadBlob(`${huntId}.pdf`, blob),
-  });
-
-  if (report.isLoading) return <p className="meta-text">Loading the report…</p>;
+  if (report.isLoading) return <p className="muted">Loading the report…</p>
 
   if (report.error) {
     return (
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <Glass className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <EmptyState title="Report unavailable">
-          This hunt did not produce a report: it may still be running, or it was
-          interrupted before its conclusion (for example by a server restart).
-          If it is finished or interrupted, you can resume it: the new
-          investigation will receive its progress rebuilt from the audit log.
+          This hunt did not produce a report: it may still be running, or it was interrupted before its conclusion (for example by a server restart). If it is finished or interrupted, you can resume it: the new investigation will receive its progress rebuilt from the audit log.
         </EmptyState>
         <ResumeCard huntId={huntId} queries={[]} />
-      </div>
-    );
+      </Glass>
+    )
   }
 
-  const data = report.data!;
-  const iterations = data.budgets.iterations;
-  const siemQueries = data.budgets.siem_queries;
-  const duration = data.budgets.duration_seconds;
-  const totalRows = data.executed_queries.reduce(
-    (sum, q) => sum + q.source_rows,
-    0,
-  );
-  const coverCells: [string, string][] = [
-    ["Analyst", data.analyst],
-    ["Period covered", formatWindow(data.investigation_window)],
-    [
-      "Sources",
-      data.sources.length > 0
-        ? data.sources.map(sourceLabel).join(", ")
-        : "none",
-    ],
-    ["Generated on", formatDate(data.generated_at)],
-  ];
-  const entities = observedEntities(data.findings);
-  const runStats: [string, string][] = [
-    [
-      "iterations",
-      iterations ? `${iterations.used} / ${iterations.limit}` : "-",
-    ],
-    [
-      "SIEM queries",
-      siemQueries ? `${siemQueries.used} / ${siemQueries.limit}` : "-",
-    ],
-    ["events read", String(totalRows)],
-    ["findings", String(data.findings.length)],
-    ["duration", duration ? formatDuration(duration.used) : "-"],
-    ["anonymization", anonymizationSummary(data.executed_queries)],
-  ];
+  const data = report.data!
+  const iterations = data.budgets.iterations
+  const siemQueries = data.budgets.siem_queries
+  const duration = data.budgets.duration_seconds
+  const totalRows = data.executed_queries.reduce((sum, q) => sum + q.source_rows, 0)
+  const entities = observedEntities(data.findings)
+  const severityCounts = countBy(data.findings.map((f) => f.severity))
+  const decided = data.human_decision
 
   return (
-    <article className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_290px]">
-      <div className="min-w-0">
-        <header className="card mb-4 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="meta-mono uppercase tracking-[0.22em]">
-                Investigation report · Threat hunting
-              </p>
-              <h1 className="mt-2 text-[21px] font-semibold leading-snug tracking-tight text-navy">
-                {data.hypothesis}
-              </h1>
-              <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                <Mono className="text-[12px] font-medium text-slate">
-                  {data.hunt_id}
-                </Mono>
-                <VerdictBadge verdict={data.proposed_verdict} />
-                {data.parent_hunt_id ? (
-                  <Link
-                    to={`/hunts/${data.parent_hunt_id}/report`}
-                    className="badge bg-[#e2eef7] text-[#0a5f9e] hover:underline"
-                  >
-                    resumed from {data.parent_hunt_id}
-                  </Link>
-                ) : null}
-                {data.partial ? (
-                  <span className="badge bg-[#faeddc] text-[#a8560b]">
-                    partial
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="flex flex-none gap-2 print:hidden">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => exportMarkdown.mutate()}
-              >
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <div className="min-w-0 max-w-4xl">
+          <p className="tech">
+            <Link to="/history" className="hover:underline">
+              Reports
+            </Link>{' '}
+            / <span className="text-[var(--ink)]">{data.hunt_id}</span>
+            {data.parent_hunt_id ? (
+              <>
+                {' '}
+                · resumed from{' '}
+                <Link to={`/hunts/${data.parent_hunt_id}/report`} className="link">
+                  {data.parent_hunt_id}
+                </Link>
+              </>
+            ) : null}
+          </p>
+          <h1 className="mt-1 !text-[32px] !leading-tight">{data.hypothesis}</h1>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {data.campaign ? <Chip tone="soft" small>{data.campaign}</Chip> : null}
+            {data.partial ? (
+              <Chip tone="amber" small>
+                partial
+              </Chip>
+            ) : null}
+            {data.status === 'interrupted' ? (
+              <Chip tone="garnet" small>
+                interrupted
+              </Chip>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Stepper
+            steps={[
+              { label: 'Indicators', state: 'done' },
+              { label: 'Playbook', state: 'done' },
+              { label: 'Your verdict', state: decided ? 'done' : 'now' },
+            ]}
+          />
+          <details className="relative">
+            <summary className="ic" title="Export the report">
+              <IconDownload size={20} />
+            </summary>
+            <div className="pop !bottom-auto !left-auto !right-0 !top-full !mt-2 !w-56">
+              <button type="button" className="block w-full py-2 text-left text-[13.5px] hover:underline" onClick={() => exportMarkdown.mutate()}>
                 Export Markdown
               </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => exportPdf.mutate()}
-                disabled={exportPdf.isPending}
-              >
-                {exportPdf.isPending ? "Exporting…" : "Export PDF"}
+              <button type="button" className="block w-full py-2 text-left text-[13.5px] hover:underline" onClick={() => exportPdf.mutate()} disabled={exportPdf.isPending}>
+                {exportPdf.isPending ? 'Exporting…' : 'Export PDF'}
               </button>
             </div>
-          </div>
-          <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-navy pt-4 md:grid-cols-4">
-            {coverCells.map(([label, value]) => (
-              <div key={label}>
-                <dt className="meta-mono uppercase">{label}</dt>
-                <dd className="mt-1 font-mono text-[12px] font-medium text-ink">
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </header>
-
-        {data.attack_overview ? (
-          <section className="card mb-4 p-5">
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b border-navy pb-2">
-              <h2 className="text-[15px] font-semibold text-ink">
-                The attack under investigation
-              </h2>
-              <span className="meta-mono uppercase">
-                Hunt hypothesis · MITRE ATT&amp;CK
-              </span>
-            </div>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
-              {data.attack_overview.description}
-            </p>
-            {data.attack_overview.techniques.length > 0 ? (
-              <ul className="mt-4 grid gap-3 md:grid-cols-2">
-                {data.attack_overview.techniques.map((technique) => (
-                  <li
-                    key={technique.id}
-                    className="flex h-full flex-col rounded-[12px] border border-rule px-4 py-3.5"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Mono className="rounded-[5px] bg-rule-soft px-2 py-1 text-[9px] font-semibold tracking-[0.1em] text-slate">
-                        {technique.id}
-                      </Mono>
-                      <h3 className="text-[13px] font-semibold leading-snug text-ink">
-                        {technique.name}
-                      </h3>
-                    </div>
-                    <p className="mt-2 text-[12.5px] leading-relaxed text-[#3d4d5c]">
-                      {technique.description}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="meta-text mt-3">
-                No MITRE ATT&amp;CK technique was tied to this hunt by the
-                agent.
-              </p>
-            )}
-            <div className="mt-4 rounded-[12px] border border-rule border-l-4 border-l-navy px-4 py-3.5">
-              <span className="label mb-1.5 block">Hunt scope</span>
-              <p className="text-[13px] leading-relaxed text-[#3d4d5c]">
-                {data.attack_overview.scope}
-              </p>
-            </div>
-          </section>
-        ) : null}
-
-        {data.playbook ? (
-          <section className="card mb-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule px-5 py-3">
-              <h2 className="text-[13px] font-semibold text-ink">Playbook</h2>
-              <span className="meta-mono uppercase">
-                {data.playbook.validated_by
-                  ? `validated by ${data.playbook.validated_by} · ${data.playbook.validated_queries} queries / ${data.playbook.validated_iterations} iterations`
-                  : "not validated"}
-              </span>
-            </div>
-            <p className="px-5 pt-4 text-sm leading-relaxed text-[#243544]">
-              {data.playbook.summary}
-            </p>
-            <div className="overflow-x-auto px-5 pb-2 pt-3">
-              <table className="w-full text-left">
-                <thead className="bg-soft-bg">
-                  <tr>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      #
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      SIEM
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      Objective
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      Technique
-                    </th>
-                    <th className="meta-mono px-3 py-2 text-right font-medium uppercase">
-                      Planned
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.playbook.steps.map((step) => (
-                    <tr
-                      key={step.order}
-                      className="border-t border-rule-soft align-top"
-                    >
-                      <td className="px-3 py-2">
-                        <Mono className="text-[11px] text-meta">
-                          {step.order}
-                        </Mono>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate">
-                        {sourceLabel(step.siem)}
-                      </td>
-                      <td className="px-3 py-2 text-[13px] text-ink">
-                        {step.objective}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Mono className="text-[11px] text-slate">
-                          {step.technique ?? ""}
-                        </Mono>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Mono className="text-xs font-medium">
-                          {step.expected_queries}
-                        </Mono>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="meta-mono px-5 pb-2 uppercase">
-              Estimate {data.playbook.estimated_queries} queries /{" "}
-              {data.playbook.estimated_iterations} iterations · executed{" "}
-              {data.executed_queries.length} query(ies)
-            </p>
-            <div className="mx-5 mb-5 rounded-[10px] border border-[#e3e8ed] bg-soft-bg px-4 py-3.5">
-              <span className="label mb-1.5 block">
-                Not covered by the plan
-              </span>
-              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#3d4d5c]">
-                {data.playbook.not_covered}
-              </p>
-            </div>
-          </section>
-        ) : null}
-
-        {data.partial ? (
-          <div className="mb-4">
-            <TruncationNotice>
-              Partial report: the hunt was interrupted (
-              {data.interruption_reason ?? "reason not specified"}).
-            </TruncationNotice>
-          </div>
-        ) : null}
-
-        <section
-          className="card mb-4 p-5"
-          style={{
-            borderLeft: `4px solid ${VERDICT_ACCENTS[data.proposed_verdict]}`,
-          }}
-        >
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-[13px] font-semibold text-ink">
-              Proposed verdict
-            </h2>
-            <VerdictBadge verdict={data.proposed_verdict} />
-            <span className="meta-mono uppercase">
-              {data.human_decision ? "validated" : "not validated"}
-            </span>
-          </div>
-          <p className="mt-3.5 whitespace-pre-wrap text-sm leading-relaxed text-[#243544]">
-            {data.summary}
-          </p>
-
-          {data.recommendation ? (
-            <div className="mt-4 rounded-[10px] border border-[#e3e8ed] bg-soft-bg px-4 py-3.5">
-              <span className="label mb-1.5 block">Recommendation</span>
-              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#3d4d5c]">
-                {data.recommendation}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="mt-4 rounded-[10px] border border-[#e3e8ed] bg-soft-bg px-4 py-3.5">
-            <span className="label mb-1.5 block">
-              Investigation limitations
-            </span>
-            <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#3d4d5c]">
-              {data.limitations}
-            </p>
-          </div>
-
-          <div className="mt-4 border-t border-rule-soft pt-4 print:hidden">
-            {data.human_decision ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-3">
-                  <VerdictBadge verdict={data.human_decision.verdict} />
-                  <span className="meta-mono uppercase">
-                    Verdict validated by {data.human_decision.decided_by} ·{" "}
-                    {formatDate(data.human_decision.decided_at)}
-                  </span>
-                </div>
-                {data.human_decision.comment ? (
-                  <p className="whitespace-pre-wrap text-sm text-ink">
-                    {data.human_decision.comment}
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <>
-                <fieldset>
-                  <legend className="meta-text mb-2.5">
-                    You confirm, correct or overturn the agent&apos;s proposal.
-                    Your decision is timestamped and attributed to you.
-                  </legend>
-                  <div className="flex flex-wrap gap-2">
-                    {VERDICTS.map((option) => (
-                      <label
-                        key={option.value}
-                        className={`cursor-pointer rounded-btn border px-3.5 py-2 text-xs
-                        font-medium transition-colors ${
-                          verdict === option.value
-                            ? "border-navy bg-navy text-white"
-                            : "border-field-border text-slate hover:bg-soft-bg"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="verdict"
-                          value={option.value}
-                          checked={verdict === option.value}
-                          onChange={() => setVerdict(option.value)}
-                          className="sr-only"
-                        />
-                        {option.label}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                <textarea
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                  rows={2}
-                  className="field mt-3 text-sm"
-                  placeholder="Comment (optional)"
-                  aria-label="Decision comment"
-                />
-                {decide.error ? (
-                  <div className="mt-3">
-                    <ErrorNotice
-                      message={
-                        decide.error instanceof ApiError
-                          ? decide.error.message
-                          : "The decision could not be recorded."
-                      }
-                    />
-                  </div>
-                ) : null}
-                <div className="mt-3.5 flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={!verdict || decide.isPending}
-                    onClick={() => decide.mutate()}
-                  >
-                    Confirm the verdict
-                  </button>
-                  <span className="meta-mono">
-                    No decision is recorded before validation.
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-[15px] font-semibold text-ink">
-            Findings{" "}
-            <span className="meta-mono font-normal">
-              {data.findings.length}
-            </span>
-          </h2>
-          {data.findings.length > 1 ? (
-            <span className="meta-mono uppercase">Sorted by severity</span>
-          ) : null}
+          </details>
         </div>
+      </div>
 
-        {data.findings.length === 0 ? (
-          <p className="meta-text mb-4">No finding recorded.</p>
-        ) : (
-          data.findings.map((finding) => (
-            <section
-              key={finding.id}
-              id={finding.id}
-              className="card mb-3 scroll-mt-20 px-5 py-4"
-              style={{
-                borderLeft: `4px solid ${SEVERITY_COLORS[finding.severity]}`,
-              }}
-            >
-              <div className="flex flex-wrap items-center gap-3">
-                <SeverityBadge severity={finding.severity} />
-                <h3 className="flex-1 text-sm font-semibold leading-snug text-ink">
-                  {finding.title}
-                </h3>
-                <span className="meta-mono uppercase">
-                  <ConfidenceLabel confidence={finding.confidence} />
-                </span>
-              </div>
-              <p className="mt-2.5 whitespace-pre-wrap text-[13px] leading-relaxed text-[#3d4d5c]">
-                {finding.description}
-              </p>
-              {finding.entities.length > 0 ? (
-                <ul className="mt-3.5 flex flex-wrap gap-1.5">
-                  {finding.entities.map((entity) => (
-                    <li
-                      key={`${entity.type}:${entity.value}`}
-                      className="flex items-center gap-1.5 rounded-[7px] border border-[#e3e8ed] bg-soft-bg px-2.5 py-1.5"
-                    >
-                      <span className="font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-meta">
-                        {entity.type}
+      {data.partial ? (
+        <Notice tone="amber">
+          Partial report: the hunt was interrupted ({data.interruption_reason ?? 'reason not specified'}).
+        </Notice>
+      ) : null}
+
+      <Glass className="grid gap-5 p-5 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.6fr)_minmax(300px,0.9fr)]">
+        <Inner className="flex flex-col p-5">
+          <div className="flex items-center justify-between">
+            <h2>The attack</h2>
+            <a href="#scope" className="sm" title="Hunt scope">
+              <IconArrowUpRight size={16} />
+            </a>
+          </div>
+          {data.attack_overview ? (
+            <>
+              <p className="mt-3 text-[13.5px] leading-relaxed">{data.attack_overview.description}</p>
+              {data.attack_overview.techniques.length > 0 ? (
+                <ol className="mt-4 space-y-2 border-t border-[var(--rule-soft)] pt-4">
+                  {data.attack_overview.techniques.map((technique, index) => (
+                    <li key={technique.id} className="flex items-start gap-3">
+                      <span className="av !bg-[var(--navy)]">{index + 1}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13.5px] font-semibold">{technique.name}</span>
+                        <span className="tech block">
+                          {technique.id} · {technique.description}
+                        </span>
                       </span>
-                      <Mono className="text-[11px] font-medium">
-                        {entity.value}
-                      </Mono>
+                      <span className="sm !cursor-default" aria-hidden="true">
+                        <IconCheck size={16} className="text-[var(--mint)]" />
+                      </span>
                     </li>
                   ))}
-                </ul>
-              ) : null}
-              <p className="meta-mono mt-3 border-t border-rule-soft pt-2.5 uppercase">
-                Evidence ·{" "}
-                {finding.evidence_query_ids.map((id, index) => (
-                  <span key={id}>
-                    {index > 0 ? " · " : ""}
-                    <a href={`#${id}`} className="text-indigo hover:underline">
-                      {id}
-                    </a>
-                  </span>
-                ))}
-              </p>
-            </section>
-          ))
-        )}
+                </ol>
+              ) : (
+                <p className="muted mt-3 text-[13px]">No MITRE ATT&amp;CK technique was tied to this hunt by the agent.</p>
+              )}
+            </>
+          ) : null}
 
-        {entities.length > 0 ? (
-          <section className="card mb-4 mt-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule px-5 py-3">
-              <h2 className="text-[13px] font-semibold text-ink">
-                Observed entities
-              </h2>
-              <span className="meta-mono uppercase">
-                {entities.length} entity(ies) · cited by the findings
+          <div className="mt-auto grid grid-cols-2 gap-3 pt-6">
+            <Tile label="Analyst">
+              <span className="flex items-center gap-2">
+                <Avatar name={data.analyst} small /> {data.analyst}
+              </span>
+            </Tile>
+            <Tile label="Window">
+              <span className="mono text-[13px]">{formatWindow(data.investigation_window)}</span>
+            </Tile>
+            <Tile label="Sources">{data.sources.length > 0 ? data.sources.map(sourceLabel).join(', ') : 'none'}</Tile>
+            <Tile label="Budget">
+              <span className="mono text-[13px]">
+                {siemQueries ? `${siemQueries.used}/${siemQueries.limit} q` : '-'} · {iterations ? `${iterations.used}/${iterations.limit} it` : '-'}
+              </span>
+            </Tile>
+          </div>
+        </Inner>
+
+        <Inner className="flex flex-col p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2>Findings</h2>
+            {(['critical', 'high', 'medium', 'low', 'info'] as const).map((severity) =>
+              severityCounts[severity] ? (
+                <Chip key={severity} small tone={severity === 'critical' ? 'garnet' : severity === 'high' ? 'amber' : severity === 'medium' ? 'olive' : severity === 'low' ? 'mint' : 'soft'}>
+                  {severityCounts[severity]} {severity}
+                </Chip>
+              ) : null,
+            )}
+          </div>
+          {data.findings.length === 0 ? (
+            <p className="muted mt-4 text-[13.5px]">No finding recorded.</p>
+          ) : (
+            <ul className="mt-2">
+              {data.findings.map((finding) => (
+                <li key={finding.id} id={finding.id} className="flex scroll-mt-24 items-start gap-3 border-t border-[var(--rule-soft)] py-3.5 first:border-t-0">
+                  <SeverityMark severity={finding.severity} />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="!text-[14.5px] !font-semibold">{finding.title}</h3>
+                    <p className="tech mt-0.5">
+                      {finding.entities.slice(0, 2).map((entity) => `${entity.type}:${entity.value}`).join(' · ')}
+                      {finding.entities.length > 0 ? ' · ' : ''}
+                      {finding.evidence_query_ids.join(', ')} · <ConfidenceText confidence={finding.confidence} />
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed">{finding.description}</p>
+                    {finding.entities.length > 0 ? (
+                      <ul className="mt-2 flex flex-wrap gap-1.5">
+                        {finding.entities.map((entity) => (
+                          <li key={`${entity.type}:${entity.value}`} className="chip chip-sm !bg-white/80">
+                            <span className="tech uppercase">{entity.type}</span>
+                            <span className="mono text-[11.5px] font-medium">{entity.value}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  <a href={`#${finding.evidence_query_ids[0]}`} className="sm" title="Open the evidence">
+                    <IconArrowUpRight size={16} />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {data.playbook ? (
+            <div className="mt-auto rounded-[18px] bg-white/60 p-4 pt-5">
+              <p className="tech">Playbook · {data.playbook.validated_by ? `validated by ${data.playbook.validated_by}` : 'not validated'}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {data.playbook.steps.map((step) => (
+                  <Chip key={step.order} small>
+                    {step.order} · {step.objective.length > 48 ? `${step.objective.slice(0, 48)}…` : step.objective}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </Inner>
+
+        <div className="flex flex-col gap-3">
+          <Inner className="p-5">
+            <p className="text-[13px] text-[var(--slate)]">Agent proposes</p>
+            <div className="mt-1 flex items-center gap-3">
+              <span className="text-[30px] font-medium leading-none" style={{ color: VERDICT_COLORS[data.proposed_verdict] }}>
+                {VERDICT_TITLES[data.proposed_verdict]}
               </span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-soft-bg">
+            <p className="mt-3 whitespace-pre-wrap text-[13.5px] leading-relaxed">{data.summary}</p>
+          </Inner>
+
+          {decided ? (
+            <Inner className="p-5">
+              <p className="text-[13px] text-[var(--slate)]">Your verdict</p>
+              <div className="mt-1 flex items-center gap-3">
+                <span className="text-[26px] font-medium leading-none" style={{ color: VERDICT_COLORS[decided.verdict] }}>
+                  {VERDICT_TITLES[decided.verdict]}
+                </span>
+                <VerdictChip verdict={decided.verdict} small />
+              </div>
+              <p className="tech mt-2">
+                validated by {decided.decided_by} · {formatDate(decided.decided_at)}
+              </p>
+              {decided.comment ? <p className="mt-3 whitespace-pre-wrap text-[13.5px] leading-relaxed">{decided.comment}</p> : null}
+            </Inner>
+          ) : (
+            <>
+              <fieldset className="grid grid-cols-2 gap-3">
+                <legend className="sr-only">Your verdict</legend>
+                {VERDICTS.map((option) => {
+                  const active = verdict === option
+                  const proposed = option === data.proposed_verdict
+                  return (
+                    <label key={option} className={`tile cursor-pointer transition-colors ${active ? '!bg-[var(--navy)] text-white' : 'hover:bg-white'}`}>
+                      <input type="radio" name="verdict" value={option} checked={active} onChange={() => setVerdict(option)} className="sr-only" />
+                      <span className={`text-[13px] ${active ? 'text-white/80' : 'text-[var(--slate)]'}`}>{proposed ? 'Proposed' : 'Verdict'}</span>
+                      <span className="text-[19px] font-medium" style={{ color: active ? '#fff' : VERDICT_COLORS[option] }}>
+                        {VERDICT_TITLES[option]}
+                      </span>
+                    </label>
+                  )
+                })}
+              </fieldset>
+              <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={3} className="field !rounded-[22px] !p-4 text-[13.5px]" placeholder="Notes for the audit log (optional)" aria-label="Decision comment" />
+              {decide.error ? <ErrorNotice message={decide.error instanceof ApiError ? decide.error.message : 'The decision could not be recorded.'} /> : null}
+              <p className="text-[12.5px] text-[var(--slate)]">You confirm, correct or overturn the agent&apos;s proposal. Your decision is timestamped and attributed to you; no decision is recorded before validation.</p>
+              <div className="mt-auto pt-2">
+                <Btn className="w-full" disabled={!verdict || decide.isPending} onClick={() => decide.mutate()} end={<IconArrowRight size={16} />}>
+                  {decide.isPending ? 'Recording…' : 'Submit and close the hunt'}
+                </Btn>
+              </div>
+            </>
+          )}
+        </div>
+      </Glass>
+
+      <Glass className="grid gap-5 p-5 md:grid-cols-2">
+        {data.recommendation ? (
+          <Inner className="p-5">
+            <h2 className="!text-[19px]">Recommendation</h2>
+            <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed">{data.recommendation}</p>
+          </Inner>
+        ) : null}
+        <Inner className="p-5">
+          <h2 className="!text-[19px]">Investigation limitations</h2>
+          <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed">{data.limitations}</p>
+        </Inner>
+        {data.attack_overview ? (
+          <Inner className="p-5 md:col-span-2" id="scope">
+            <h2 className="!text-[19px]">Hunt scope</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed">{data.attack_overview.scope}</p>
+          </Inner>
+        ) : null}
+      </Glass>
+
+      {data.playbook ? (
+        <Glass className="p-5">
+          <Inner className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2>Playbook</h2>
+              <span className="tech">
+                {data.playbook.validated_by
+                  ? `validated by ${data.playbook.validated_by} · ${data.playbook.validated_queries} queries / ${data.playbook.validated_iterations} iterations`
+                  : 'not validated'}{' '}
+                · estimate {data.playbook.estimated_queries} / {data.playbook.estimated_iterations} · executed {data.executed_queries.length}
+              </span>
+            </div>
+            <p className="mt-2 text-[13.5px] leading-relaxed">{data.playbook.summary}</p>
+            <table className="tbl mt-3">
+              <thead>
+                <tr>
+                  <th className="w-12">#</th>
+                  <th className="w-28">SIEM</th>
+                  <th>Objective</th>
+                  <th className="w-32">Technique</th>
+                  <th className="w-20 text-right">Planned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.playbook.steps.map((step) => (
+                  <tr key={step.order}>
+                    <td className="mono text-[12.5px] text-[var(--slate)]">{step.order}</td>
+                    <td className="text-[13.5px] text-[var(--slate)]">{sourceLabel(step.siem)}</td>
+                    <td className="text-[13.5px]">{step.objective}</td>
+                    <td>{step.technique ? <Chip tone="soft" small className="mono !font-medium">{step.technique}</Chip> : null}</td>
+                    <td className="mono text-right text-[13px] font-medium">{step.expected_queries}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-4 rounded-[18px] bg-white/60 p-4">
+              <span className="lbl">Not covered by the plan</span>
+              <p className="mt-1 whitespace-pre-wrap text-[13.5px] leading-relaxed">{data.playbook.not_covered}</p>
+            </div>
+          </Inner>
+        </Glass>
+      ) : null}
+
+      <Glass className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-5">
+          {data.timeline.length > 0 ? (
+            <Inner className="p-5">
+              <h2>Timeline</h2>
+              <ol className="mt-4 space-y-3 border-l border-[var(--rule)] pl-5">
+                {data.timeline.map((event, index) => (
+                  <li key={`${event.timestamp}-${index}`} className="relative">
+                    <span className="absolute -left-[1.45rem] top-1.5 h-2.5 w-2.5 rounded-full bg-[var(--accent)]" aria-hidden="true" />
+                    <Mono className="text-[12px] text-[var(--slate)]">{event.timestamp}</Mono>
+                    <p className="text-[13.5px]">{event.event}</p>
+                    <p className="tech">{event.source}</p>
+                  </li>
+                ))}
+              </ol>
+            </Inner>
+          ) : null}
+
+          {entities.length > 0 ? (
+            <Inner className="p-5">
+              <div className="flex items-center justify-between">
+                <h2>Observed entities</h2>
+                <span className="tech">{entities.length} cited by the findings</span>
+              </div>
+              <table className="tbl mt-2">
+                <thead>
                   <tr>
-                    <th className="meta-mono px-5 py-2 font-medium uppercase">
-                      Type
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      Value
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      Context
-                    </th>
-                    <th className="meta-mono px-5 py-2 text-right font-medium uppercase">
-                      Occ.
-                    </th>
+                    <th className="w-28">Type</th>
+                    <th>Value</th>
+                    <th>Context</th>
+                    <th className="w-16 text-right">Occ.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {entities.map((entry) => (
-                    <tr key={entry.key} className="border-t border-rule-soft">
-                      <td className="meta-mono px-5 py-2 uppercase">
-                        {entry.type}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Mono className="text-xs font-medium text-ink">
-                          {entry.value}
-                        </Mono>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate">
-                        <a
-                          href={`#${entry.findings[0].id}`}
-                          className="hover:underline"
-                        >
+                    <tr key={entry.key}>
+                      <td className="tech uppercase">{entry.type}</td>
+                      <td className="mono text-[13px] font-medium">{entry.value}</td>
+                      <td className="text-[13px] text-[var(--slate)]">
+                        <a href={`#${entry.findings[0].id}`} className="hover:underline">
                           {entry.findings[0].title}
                         </a>
                       </td>
-                      <td className="px-5 py-2 text-right">
-                        <Mono className="text-xs font-medium">
-                          {entry.findings.length}
-                        </Mono>
-                      </td>
+                      <td className="mono text-right text-[13px] font-medium">{entry.findings.length}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </section>
-        ) : null}
+            </Inner>
+          ) : null}
 
-        {data.executed_queries.length > 0 ? (
-          <section className="card mb-4 mt-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule px-5 py-3">
-              <h2 className="text-[13px] font-semibold text-ink">
-                Execution log
-              </h2>
-              <span className="meta-mono uppercase">
-                {data.executed_queries.length} query(ies)
-                {duration ? ` · duration ${formatDuration(duration.used)}` : ""}
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-soft-bg">
+          {data.executed_queries.length > 0 ? (
+            <Inner className="p-5">
+              <div className="flex items-center justify-between">
+                <h2>Execution log</h2>
+                <span className="tech">
+                  {data.executed_queries.length} {plural(data.executed_queries.length, 'query', 'queries')}
+                  {duration ? ` · ${formatDuration(duration.used)}` : ''} · {totalRows} events read
+                </span>
+              </div>
+              <table className="tbl mt-2">
+                <thead>
                   <tr>
-                    <th className="meta-mono px-5 py-2 font-medium uppercase">
-                      Time
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      Reference
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      SIEM
-                    </th>
-                    <th className="meta-mono px-3 py-2 font-medium uppercase">
-                      Objective
-                    </th>
-                    <th className="meta-mono px-5 py-2 text-right font-medium uppercase">
-                      Rows
-                    </th>
+                    <th className="w-24">Time</th>
+                    <th className="w-32">Reference</th>
+                    <th className="w-24">SIEM</th>
+                    <th>Objective</th>
+                    <th className="w-16 text-right">Rows</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.executed_queries.map((query) => (
-                    <tr
-                      key={query.query_id}
-                      className="border-t border-rule-soft"
-                    >
-                      <td className="px-5 py-2">
-                        <Mono className="text-[11px] text-slate">
-                          {formatTime(query.executed_at)}
-                        </Mono>
-                      </td>
-                      <td className="px-3 py-2">
-                        <a
-                          href={`#${query.query_id}`}
-                          className="font-mono text-[11px] font-medium text-indigo hover:underline"
-                        >
+                    <tr key={query.query_id}>
+                      <td className="mono text-[12px] text-[var(--slate)]">{formatTime(query.executed_at)}</td>
+                      <td>
+                        <a href={`#${query.query_id}`} className="link mono text-[12px]">
                           {query.query_id}
                         </a>
                       </td>
-                      <td className="meta-mono px-3 py-2 uppercase">
-                        {query.siem}
-                      </td>
-                      <td className="max-w-[28rem] px-3 py-2">
-                        {query.intent ? (
-                          <span className="text-xs text-[#3d4d5c]">
-                            {query.intent}
-                          </span>
-                        ) : (
-                          <Mono className="block truncate text-[11px] text-[#3d4d5c]">
-                            {firstLine(query.query)}
-                          </Mono>
-                        )}
-                      </td>
-                      <td className="px-5 py-2 text-right">
-                        <Mono className="text-[11px] font-medium">
-                          {query.returned_rows}
-                          {query.truncated ? " ⚠" : ""}
-                        </Mono>
+                      <td className="tech uppercase">{query.siem}</td>
+                      <td className="max-w-[28rem] text-[13px]">{query.intent ?? <Mono className="block truncate text-[11.5px]">{firstLine(query.query)}</Mono>}</td>
+                      <td className="mono text-right text-[12.5px] font-medium">
+                        {query.returned_rows}
+                        {query.truncated ? ' ⚠' : ''}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </section>
-        ) : null}
+            </Inner>
+          ) : null}
 
-        {data.timeline.length > 0 ? (
-          <section className="card mb-4 mt-4 p-5">
-            <h2 className="mb-4 text-[13px] font-semibold text-ink">
-              Timeline
-            </h2>
-            <ol className="space-y-3 border-l border-rule pl-5">
-              {data.timeline.map((event, index) => (
-                <li key={`${event.timestamp}-${index}`} className="relative">
-                  <span
-                    className="absolute -left-[1.4rem] top-1.5 h-2 w-2 rounded-full bg-accent"
-                    aria-hidden="true"
-                  />
-                  <Mono className="text-[11px] text-slate">
-                    {event.timestamp}
-                  </Mono>
-                  <p className="text-[13px] text-ink">{event.event}</p>
-                  <p className="meta-mono uppercase">{event.source}</p>
-                </li>
-              ))}
-            </ol>
-          </section>
-        ) : null}
+          {data.iocs.length > 0 ? (
+            <Inner className="p-5">
+              <h2>Indicators</h2>
+              <ul className="mt-2">
+                {data.iocs.map((ioc) => (
+                  <li key={`${ioc.type}:${ioc.value}`} className="flex flex-wrap items-center gap-3 border-t border-[var(--rule-soft)] py-2.5 first:border-t-0">
+                    <Mono className="text-[12.5px] font-medium">{ioc.value}</Mono>
+                    <Chip tone="soft" small>
+                      {ioc.type}
+                    </Chip>
+                    <Chip tone={ioc.status === 'validated' ? 'mint' : ioc.status === 'rejected' ? 'garnet' : 'amber'} small>
+                      {ioc.status.replace('_', ' ')}
+                    </Chip>
+                    {ioc.source_url.startsWith('internal://') ? (
+                      <span className="text-[13px] text-[var(--slate)]">{ioc.source}</span>
+                    ) : (
+                      <a href={ioc.source_url} target="_blank" rel="noreferrer noopener" className="link text-[13px]">
+                        {ioc.source}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Inner>
+          ) : null}
 
-        {data.iocs.length > 0 ? (
-          <section className="card mb-4 mt-4">
-            <h2 className="card-header">Indicators</h2>
-            <ul className="px-5 py-2">
-              {data.iocs.map((ioc) => (
-                <li
-                  key={`${ioc.type}:${ioc.value}`}
-                  className="flex flex-wrap items-baseline gap-3 border-b border-rule-soft py-2 last:border-b-0"
-                >
-                  <Mono className="text-xs font-medium text-ink">
-                    {ioc.value}
-                  </Mono>
-                  <span className="meta-mono uppercase">{ioc.type}</span>
-                  <span className="meta-mono uppercase">{ioc.status}</span>
-                  {ioc.source_url.startsWith("internal://") ? (
-                    <span className="meta-text">{ioc.source}</span>
-                  ) : (
-                    <a
-                      href={ioc.source_url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="text-xs text-indigo hover:underline"
-                    >
-                      {ioc.source}
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        <section className="card mt-4">
-          <h2 className="card-header">
-            Appendix · executed queries (full text)
-          </h2>
-          <div className="space-y-4 p-5">
-            {data.executed_queries.map((query) => (
-              <div
-                key={query.query_id}
-                id={query.query_id}
-                className="scroll-mt-20 space-y-2"
-              >
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <Mono className="text-xs font-medium text-indigo">
-                    {query.query_id}
-                  </Mono>
-                  <span className="meta-mono uppercase">{query.siem}</span>
-                  <span className="meta-mono">
-                    {query.returned_rows} row(s)
-                  </span>
-                  <span className="meta-mono">
-                    {formatDate(query.executed_at)}
-                  </span>
+          <Inner className="p-5">
+            <h2>Appendix · executed queries</h2>
+            <p className="text-[13px] text-[var(--slate)]">Full text, the agent&apos;s reading, and the sample as the analyst sees it versus what the model received.</p>
+            <div className="mt-4 space-y-6">
+              {data.executed_queries.map((query) => (
+                <div key={query.query_id} id={query.query_id} className="scroll-mt-24 space-y-2 border-t border-[var(--rule-soft)] pt-4 first:border-t-0 first:pt-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Mono className="text-[12.5px] font-medium text-[var(--indigo)]">{query.query_id}</Mono>
+                    <Chip tone="navy" small className="uppercase">
+                      {query.siem}
+                    </Chip>
+                    <span className="tech">
+                      {query.returned_rows} row(s) · {formatDate(query.executed_at)}
+                    </span>
+                  </div>
+                  {query.intent ? <p className="text-[14px] font-medium">{query.intent}</p> : null}
+                  <QueryBlock query={query.query} />
+                  <AnonymizationLine info={query.anonymization} />
+                  <ResultSample columns={query.columns} rows={query.sample} modelRows={query.model_sample} sourceRows={query.source_rows} />
+                  {query.interpretation ? (
+                    <div className="rounded-[18px] bg-white/60 p-4">
+                      <span className="lbl">The agent&apos;s reading</span>
+                      <p className="mt-1 whitespace-pre-wrap text-[13.5px] leading-relaxed">{query.interpretation}</p>
+                    </div>
+                  ) : null}
+                  {query.truncated ? (
+                    <TruncationNotice>
+                      {query.source_rows} rows returned by the source, cap reached: the result is not exhaustive. The model received {query.returned_rows}
+                      {query.source_rows > query.returned_rows ? ' (with aggregates)' : ''}.
+                    </TruncationNotice>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="link text-[13px]"
+                    onClick={() => {
+                      setResumeFrom(query.query_id)
+                      document.getElementById('card-resume')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }}
+                  >
+                    Resume the investigation from here
+                  </button>
                 </div>
-                {query.intent ? (
-                  <p className="text-sm text-ink">{query.intent}</p>
-                ) : null}
-                <QueryBlock query={query.query} />
-                <AnonymizationLine info={query.anonymization} />
-                <ResultSample
-                  columns={query.columns}
-                  rows={query.sample}
-                  modelRows={query.model_sample}
-                  sourceRows={query.source_rows}
-                />
-                {query.truncated ? (
-                  <TruncationNotice>
-                    {query.source_rows} rows returned by the source, cap
-                    reached: the result is not exhaustive. The model received{" "}
-                    {query.returned_rows}
-                    {query.source_rows > query.returned_rows
-                      ? " (with aggregates)"
-                      : ""}
-                    .
-                  </TruncationNotice>
-                ) : null}
-                <button
-                  type="button"
-                  className="text-xs text-indigo hover:underline print:hidden"
-                  onClick={() => {
-                    setResumeFrom(query.query_id);
-                    document
-                      .getElementById("card-resume")
-                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  }}
-                >
-                  Resume the investigation from here →
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <aside className="sticky top-[72px] hidden flex-col gap-4 xl:flex print:hidden">
-        {data.findings.length > 0 ? (
-          <nav className="card" aria-label="Findings summary">
-            <div className="label border-b border-rule px-3.5 py-3">
-              Contents
+              ))}
             </div>
-            {data.findings.map((finding) => (
-              <a
-                key={finding.id}
-                href={`#${finding.id}`}
-                className="flex gap-2.5 border-b border-rule-soft px-3.5 py-2.5 text-ink last:border-b-0 hover:bg-soft-bg"
-              >
-                <span
-                  className="mt-1.5 h-[7px] w-[7px] flex-none rounded-full"
-                  style={{ background: SEVERITY_COLORS[finding.severity] }}
-                  aria-hidden="true"
-                />
-                <span className="text-xs leading-snug">{finding.title}</span>
-              </a>
-            ))}
-          </nav>
-        ) : null}
-
-        <ResumeCard
-          huntId={data.hunt_id}
-          queries={data.executed_queries}
-          prefillFromQuery={resumeFrom}
-        />
-
-        <div className="card p-3.5">
-          <div className="label mb-3">Execution</div>
-          {runStats.map(([k, v]) => (
-            <div
-              key={k}
-              className="flex justify-between border-b border-rule-soft py-1.5 font-mono text-[11px] last:border-b-0"
-            >
-              <span className="text-slate">{k}</span>
-              <span className="font-medium">{v}</span>
-            </div>
-          ))}
+          </Inner>
         </div>
-      </aside>
-    </article>
-  );
+
+        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+          {data.findings.length > 0 ? (
+            <Inner className="p-5">
+              <span className="lbl">Contents</span>
+              <nav className="mt-2" aria-label="Findings summary">
+                {data.findings.map((finding) => (
+                  <a key={finding.id} href={`#${finding.id}`} className="flex gap-2.5 border-t border-[var(--rule-soft)] py-2.5 text-[13px] leading-snug first:border-t-0 hover:underline">
+                    <span className="mt-1.5 h-2 w-2 flex-none rounded-full" style={{ background: SEVERITY_COLORS[finding.severity] }} aria-hidden="true" />
+                    {finding.title}
+                  </a>
+                ))}
+              </nav>
+            </Inner>
+          ) : null}
+          <ResumeCard huntId={data.hunt_id} queries={data.executed_queries} prefillFromQuery={resumeFrom} />
+          <Inner className="p-5">
+            <span className="lbl">Execution</span>
+            <dl className="mono mt-2 text-[12.5px]">
+              {(
+                [
+                  ['iterations', iterations ? `${iterations.used} / ${iterations.limit}` : '-'],
+                  ['SIEM queries', siemQueries ? `${siemQueries.used} / ${siemQueries.limit}` : '-'],
+                  ['events read', String(totalRows)],
+                  ['findings', String(data.findings.length)],
+                  ['duration', duration ? formatDuration(duration.used) : '-'],
+                  ['anonymization', anonymizationSummary(data.executed_queries)],
+                  ['generated', formatDate(data.generated_at)],
+                ] as [string, string][]
+              ).map(([key, value]) => (
+                <div key={key} className="flex justify-between gap-3 border-t border-[var(--rule-soft)] py-1.5 first:border-t-0">
+                  <dt className="text-[var(--slate)]">{key}</dt>
+                  <dd className="text-right font-medium">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Inner>
+        </aside>
+      </Glass>
+    </div>
+  )
 }
 
-function ResumeCard({
-  huntId,
-  queries,
-  prefillFromQuery = null,
-}: {
-  huntId: string;
-  queries: ExecutedQuery[];
-  prefillFromQuery?: string | null;
-}) {
-  const navigate = useNavigate();
-  const [instruction, setInstruction] = useState("");
-  const [fromQuery, setFromQuery] = useState("");
-
+function ResumeCard({ huntId, queries, prefillFromQuery = null }: { huntId: string; queries: ExecutedQuery[]; prefillFromQuery?: string | null }) {
+  const navigate = useNavigate()
+  const [instruction, setInstruction] = useState('')
+  const [fromQuery, setFromQuery] = useState('')
   useEffect(() => {
-    if (prefillFromQuery) setFromQuery(prefillFromQuery);
-  }, [prefillFromQuery]);
-  const options = useQuery({
-    queryKey: ["resume-options", huntId],
-    queryFn: () => api.resumeOptions(huntId),
-  });
+    if (prefillFromQuery) setFromQuery(prefillFromQuery)
+  }, [prefillFromQuery])
+  const options = useQuery({ queryKey: ['resume-options', huntId], queryFn: () => api.resumeOptions(huntId) })
 
   const continueInPlace = useMutation({
-    mutationFn: () =>
-      api.continueHunt(
-        huntId,
-        instruction.trim() ? { instruction: instruction.trim() } : {},
-      ),
+    mutationFn: () => api.continueHunt(huntId, instruction.trim() ? { instruction: instruction.trim() } : {}),
     onSuccess: () => navigate(`/hunts/${huntId}/feed`),
-  });
-
+  })
   const resume = useMutation({
     mutationFn: () =>
       api.resumeHunt(huntId, {
@@ -858,58 +603,31 @@ function ResumeCard({
         ...(fromQuery ? { from_query_id: fromQuery } : {}),
       }),
     onSuccess: (created) => navigate(`/hunts/${created.hunt_id}/playbook`),
-  });
+  })
 
   return (
-    <div className="card p-3.5" id="card-resume">
-      <div className="label mb-2">Resume this hunt</div>
-      <textarea
-        value={instruction}
-        onChange={(event) => setInstruction(event.target.value)}
-        rows={2}
-        className="field mb-3 text-sm"
-        placeholder="Question or instruction for what follows (optional)"
-        aria-label="Instruction for the resume"
-      />
+    <Inner className="p-5" id="card-resume">
+      <span className="lbl">Resume this hunt</span>
+      <textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} rows={2} className="field mt-2 !rounded-[18px] text-[13.5px]" placeholder="Question or instruction for what follows (optional)" aria-label="Instruction for the resume" />
       {options.data?.continuable ? (
-        <div className="mb-4 border-b border-rule-soft pb-4">
-          <p className="meta-text mb-2.5">
-            {options.data?.status === "awaiting_review"
-              ? "Same investigation: the agent starts again from its memory, its queries and its findings, with your instruction, and will conclude again. This report will be replaced; the previous one stays in the audit trail. Once the verdict is validated, the hunt is frozen."
-              : "Same investigation: the agent starts again from its memory, its queries and its findings, with your instruction and its remaining budgets. If they are exhausted, it will ask you for an extension in the feed."}
+        <div className="mt-3 border-b border-[var(--rule-soft)] pb-4">
+          <p className="text-[12.5px] text-[var(--slate)]">
+            {options.data.status === 'awaiting_review'
+              ? 'Same investigation: the agent starts again from its memory, its queries and its findings, with your instruction, and will conclude again. This report will be replaced; the previous one stays in the audit trail. Once the verdict is validated, the hunt is frozen.'
+              : 'Same investigation: the agent starts again from its memory, its queries and its findings, with your instruction and its remaining budgets. If they are exhausted, it will ask you for an extension in the feed.'}
           </p>
-          <button
-            type="button"
-            className="btn-primary w-full justify-center"
-            onClick={() => continueInPlace.mutate()}
-            disabled={continueInPlace.isPending}
-          >
-            {continueInPlace.isPending
-              ? "Resuming…"
-              : "Continue the same investigation"}
-          </button>
-          {continueInPlace.error ? (
-            <p className="mt-2 text-sm text-garnet">
-              {continueInPlace.error instanceof ApiError
-                ? continueInPlace.error.message
-                : "Cannot resume."}
-            </p>
-          ) : null}
+          <Btn className="mt-3 w-full" size="sm" onClick={() => continueInPlace.mutate()} disabled={continueInPlace.isPending}>
+            {continueInPlace.isPending ? 'Resuming…' : 'Continue the same investigation'}
+          </Btn>
+          {continueInPlace.error ? <p className="mt-2 text-[13px] text-[var(--garnet)]">{continueInPlace.error instanceof ApiError ? continueInPlace.error.message : 'Cannot resume.'}</p> : null}
         </div>
       ) : null}
-      <p className="meta-text mb-3">
-        {options.data?.continuable ? "Or start over in a n" : "N"}ew linked
-        investigation, with a new hunt and a new report: it inherits the
-        validated indicators and this hunt&apos;s progress, and goes through the
-        playbook again. This report stays unchanged.
+      <p className="mt-3 text-[12.5px] text-[var(--slate)]">
+        {options.data?.continuable ? 'Or start over in a n' : 'N'}ew linked investigation, with a new hunt and a new report: it inherits the validated indicators and this hunt&apos;s progress, and goes through the playbook again. This report stays unchanged.
       </p>
-      <label className="mb-3 block text-xs text-slate">
-        Resume after
-        <select
-          value={fromQuery}
-          onChange={(event) => setFromQuery(event.target.value)}
-          className="field mt-1 font-mono text-xs"
-        >
+      <label className="mt-3 block text-[13px]">
+        <span className="lbl">Resume after</span>
+        <select value={fromQuery} onChange={(event) => setFromQuery(event.target.value)} className="field field-pill mono mt-1 text-[12.5px]">
           <option value="">the end of the hunt</option>
           {queries.map((query) => (
             <option key={query.query_id} value={query.query_id}>
@@ -918,137 +636,47 @@ function ResumeCard({
           ))}
         </select>
       </label>
-      <button
-        type="button"
-        className="btn-secondary w-full justify-center"
-        onClick={() => resume.mutate()}
-        disabled={resume.isPending}
-      >
-        {resume.isPending
-          ? "Creating…"
-          : "New linked investigation (playbook to validate)"}
-      </button>
-      {resume.error ? (
-        <p className="mt-2 text-sm text-garnet">
-          {resume.error instanceof ApiError
-            ? resume.error.message
-            : "Cannot resume."}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function formatWindow(window: string | null): string {
-  if (!window) return "default window";
-  const ends = window.split("->").map((part) => part.trim());
-  if (ends.length !== 2) return window;
-  const render = (value: string) => {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? value
-      : parsed.toLocaleDateString("en-GB");
-  };
-  return `${render(ends[0])} → ${render(ends[1])}`;
-}
-
-const SOURCE_LABELS: Record<string, string> = {
-  sentinel: "Sentinel",
-  defender: "Defender",
-  secops: "SecOps",
-};
-
-function sourceLabel(source: string): string {
-  return SOURCE_LABELS[source] ?? source;
-}
-
-function formatTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleTimeString("en-GB");
-}
-
-function firstLine(query: string): string {
-  return (
-    query
-      .split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? ""
-  );
+      <Btn variant="light" className="mt-3 w-full" size="sm" onClick={() => resume.mutate()} disabled={resume.isPending}>
+        {resume.isPending ? 'Creating…' : 'New linked investigation'}
+      </Btn>
+      {resume.error ? <p className="mt-2 text-[13px] text-[var(--garnet)]">{resume.error instanceof ApiError ? resume.error.message : 'Cannot resume.'}</p> : null}
+    </Inner>
+  )
 }
 
 interface ObservedEntity {
-  key: string;
-  type: string;
-  value: string;
-  findings: Finding[];
+  key: string
+  type: string
+  value: string
+  findings: Finding[]
 }
 
 function observedEntities(findings: Finding[]): ObservedEntity[] {
-  const seen = new Map<string, ObservedEntity>();
+  const seen = new Map<string, ObservedEntity>()
   for (const finding of findings) {
     for (const entity of finding.entities) {
-      const key = `${entity.type.toLowerCase()}:${entity.value}`;
-      const entry = seen.get(key);
-      if (entry) {
-        entry.findings.push(finding);
-      } else {
-        seen.set(key, {
-          key,
-          type: entity.type,
-          value: entity.value,
-          findings: [finding],
-        });
-      }
+      const key = `${entity.type.toLowerCase()}:${entity.value}`
+      const entry = seen.get(key)
+      if (entry) entry.findings.push(finding)
+      else seen.set(key, { key, type: entity.type, value: entity.value, findings: [finding] })
     }
   }
-  return [...seen.values()].sort(
-    (a, b) => b.findings.length - a.findings.length,
-  );
+  return [...seen.values()].sort((a, b) => b.findings.length - a.findings.length)
+}
+
+function countBy(values: string[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const value of values) counts[value] = (counts[value] ?? 0) + 1
+  return counts
 }
 
 function anonymizationSummary(queries: ExecutedQuery[]): string {
-  const traced = queries
-    .map((query) => query.anonymization)
-    .filter(
-      (info): info is AnonymizationInfo => info !== null && "tokens" in info,
-    );
-  if (traced.length === 0) return "not traced";
-  if (traced.some((info) => !info.tokenization)) return "tokenization disabled";
-  const degraded = traced.filter((info) => info.semantic === "degraded").length;
-  const disabled = traced.filter((info) => info.semantic === "disabled").length;
-  if (degraded > 0) return `semantic degraded ${degraded}/${traced.length}`;
-  if (disabled === traced.length) return "deterministic only";
-  return `semantic active ${traced.length - disabled}/${traced.length}`;
-}
-
-function formatDuration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return minutes > 0 ? `${minutes} min ${rest} s` : `${rest} s`;
-}
-
-function downloadText(filename: string, content: string): void {
-  downloadBlob(
-    filename,
-    new Blob([content], { type: "text/markdown;charset=utf-8" }),
-  );
-}
-
-function downloadBlob(filename: string, blob: Blob): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+  const traced = queries.map((query) => query.anonymization).filter((info): info is AnonymizationInfo => info !== null && 'tokens' in info)
+  if (traced.length === 0) return 'not traced'
+  if (traced.some((info) => !info.tokenization)) return 'tokenization disabled'
+  const degraded = traced.filter((info) => info.semantic === 'degraded').length
+  const disabled = traced.filter((info) => info.semantic === 'disabled').length
+  if (degraded > 0) return `semantic degraded ${degraded}/${traced.length}`
+  if (disabled === traced.length) return 'deterministic only'
+  return `semantic active ${traced.length - disabled}/${traced.length}`
 }
