@@ -23,6 +23,7 @@ from api.runtime import HuntRuntime, SiemClients, build_clients, build_threat_in
 from middleware.clients.base import configure_outbound_ca
 from middleware.config import Settings, get_settings
 from middleware.secrets import build_secret_provider
+from orchestrator.demo_gateway import ScriptedGateway
 from orchestrator.gateway import GatewayClient
 from storage.repository import Database, HuntRepository, SqlAuditSink
 
@@ -81,11 +82,20 @@ def create_app(
             signing_key = pysecrets.token_urlsafe(48)
             store.set("SESSION_SIGNING_KEY", signing_key, actor="system")
         clients: SiemClients = build_clients(resolved, secrets)
-        gateway = GatewayClient(
-            base_url=resolved.gateway_base_url,
-            api_key=secrets.get_optional("GATEWAY_API_KEY") or "",
-            prompt_caching=resolved.gateway_prompt_caching,
-        )
+        gateway: GatewayClient | ScriptedGateway
+        if resolved.demo_gateway:
+            if resolved.environment != "dev":
+                raise RuntimeError(
+                    "The scripted gateway (SHL_DEMO_GATEWAY) is forbidden outside the dev "
+                    "environment."
+                )
+            gateway = ScriptedGateway(delay_seconds=resolved.demo_gateway_delay_seconds)
+        else:
+            gateway = GatewayClient(
+                base_url=resolved.gateway_base_url,
+                api_key=secrets.get_optional("GATEWAY_API_KEY") or "",
+                prompt_caching=resolved.gateway_prompt_caching,
+            )
         runtime = HuntRuntime(
             settings=resolved,
             repository=repository,

@@ -156,6 +156,13 @@ class Settings(BaseSettings):
     Explicit and confined to development: `build_clients` refuses to enable it outside
     `dev`. Each simulated row carries a `simulation` marker and the front shows a banner."""
 
+    demo_gateway: bool = False
+    """Replaces the AI gateway with a scripted investigation, for demonstration without a
+    model. Same confinement as `demo_siem`: `create_app` refuses it outside `dev`."""
+
+    demo_gateway_delay_seconds: float = 3.0
+    """Pause between two scripted turns, so the live feed reads at a model's pace."""
+
     sentinel: SiemCaps = SiemCaps()
     defender: SiemCaps = SiemCaps(window_days_max=30)
     secops: SiemCaps = SiemCaps(window_days_max=90)
