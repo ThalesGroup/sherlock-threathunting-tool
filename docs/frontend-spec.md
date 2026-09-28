@@ -85,11 +85,11 @@ Palette:
 | Name | Hex | Usage |
 |---|---|---|
 | Ink | `#12212f` | Main text, headings |
-| Paper | `#e9edf1` | Background of reading areas |
+| Paper | `#e3e8ef` | Page ground; cards are translucent white over it |
 | Slate | `#5b6b7c` | Secondary text, rules |
 | Meta | `#8494a3` | Metadata, timestamps, muted labels |
 | Indigo | `#0a5f9e` | Interactive elements, links, selection |
-| Navy | `#0d1e33` | Sidebar, primary buttons |
+| Navy | `#0d1e33` | Active rail item, primary buttons, verdict tiles |
 | Accent | `#2b8fd6` | Signature accents |
 | Amber | `#a8560b` | Pending validation, truncated result, budget started |
 | Garnet | `#8f1d1d` | Critical severity, escalation |
@@ -97,12 +97,18 @@ Palette:
 
 Amber and garnet only serve to signal, never to decorate. A healthy screen is in ink, paper and slate.
 
+Layout: a fixed icon rail on the left carries the navigation and expands over the page on
+hover, with the labels fading in; the page itself never moves. Content sits on translucent
+"glass" cards over a cool grey ground, with a soft inner card for each block. Human
+checkpoints are marked by a three-step indicator (indicators, playbook, verdict) at the
+top of every hunt screen.
+
 Typography:
 
-- Titles and body text: a geometric sans stack - Century Gothic, with URW Gothic, Jost and Questrial as fallbacks, then the system sans.
-- Data: IBM Plex Mono, for queries, hashes, IP addresses, domains and identifiers.
+- Titles and body text: Outfit, self-hosted, with Helvetica Neue and Arial as fallbacks.
+- Data: IBM Plex Mono, self-hosted, for queries, hashes, IP addresses, domains and identifiers.
 
-Monospace is not a stylistic effect: it is the language of the subject. A hash or a KQL query reads in fixed width, and this typographic distinction visually separates what the machine produced from what a human wrote.
+The font files live in `web/public/fonts`: no outbound request from the analyst's browser.
 
 Signature element: the investigation feed. The stance is to show the agent's reasoning instead of hiding it behind a loading indicator. Trust in an autonomous agent is not decreed, it is verified; the interface therefore makes the execution trace its central object rather than a piece of debug information relegated to the side.
 

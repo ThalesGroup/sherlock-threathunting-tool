@@ -336,8 +336,12 @@ class SiemExecutor:
         udm_query = self._to_internal(udm_query)
         caps = self._settings.secops
         row_cap = caps.clamp_rows(max_rows)
+        # The period set by the analyst is the authority: a query may span all of it, even
+        # beyond the per-source default depth, and is then clamped to it. The default depth
+        # only caps the agent's windows when no period was set.
+        max_days = None if self._window is not None else caps.window_days_max
         try:
-            start, end = validate_window(start_time, end_time, max_days=caps.window_days_max)
+            start, end = validate_window(start_time, end_time, max_days=max_days)
         except ToolError as error:
             await self._journal.record(
                 AuditEventType.QUERY_REJECTED,

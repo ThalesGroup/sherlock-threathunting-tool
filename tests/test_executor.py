@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from middleware.audit import AuditEventType, AuditJournal, MemoryAuditSink
@@ -124,6 +126,23 @@ class TestInvestigationWindow:
         assert secops.calls == []
         rejected = [e for e in sink.events if e.type is AuditEventType.QUERY_REJECTED]
         assert rejected and rejected[0].detail["stage"] == "investigation period"
+
+    async def test_secops_accepts_a_window_as_wide_as_the_period(self):
+        """The period chosen at creation is the authority: the agent may query all of it
+        even when it exceeds the per-source default depth (90 days for SecOps)."""
+
+        secops = FakeSecOps()
+        long_window = (datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 8, 20, tzinfo=UTC))
+        executor, _ = build(secops=secops, window=long_window)
+        await executor.run_secops(
+            udm_query='metadata.event_type = "PROCESS_LAUNCH"',
+            start_time="2025-12-01T00:00:00Z",
+            end_time="2026-08-25T00:00:00Z",
+        )
+
+        call = secops.calls[0]
+        assert call["start"] == "2026-01-01T00:00:00+00:00"
+        assert call["end"] == "2026-08-20T00:00:00+00:00"
 
     async def test_sentinel_receives_the_absolute_timespan(self):
         class FakeSentinelWithTimespan(FakeSentinel):

@@ -28,3 +28,4 @@ report_demo*.pdf
 backup-*/
 
 *_inventory_*.xlsx
+.DS_Store

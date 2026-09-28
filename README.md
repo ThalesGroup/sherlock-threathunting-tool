@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/public/logo_sherlock.jpg" alt="SHERLOCK" width="460">
+  <img src="web/public/logo_sherlock.png" alt="SHERLOCK" width="460">
 </p>
 
 # SHERLOCK - Threat Hunting Tool
@@ -98,6 +98,9 @@ cp .env.example .env            # set the gateway URL, model IDs, internal DNS s
 
 # frontend
 cd web && npm install && npm run dev
+
+# optional: demonstration content (dev only) - hunts in every state, CTI analyses, accounts
+.venv/bin/python scripts/seed_demo.py
 ```
 
 API keys (gateway, anonymizer, SIEM identities, threat intel) are entered in the

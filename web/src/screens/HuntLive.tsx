@@ -1,34 +1,38 @@
 /**
- * Screen 3 - Hunt in progress.
- *
- * Signature element of the interface: the agent's reasoning is shown instead of being
- * hidden behind a loading indicator. Trust in an autonomous agent is not decreed, it is
- * verified - the execution trace is therefore the central object of the screen, not a
- * debug detail relegated to the side.
+ * Hunt in progress. The agent's reasoning is shown instead of being hidden behind a
+ * loading indicator: the execution trace is the central object of the screen.
  */
 
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import {
-  ErrorNotice,
-  Mono,
-  QueryBlock,
-  SectionTitle,
-  SeverityBadge,
-  TruncationNotice,
-} from '@/components/primitives'
-import { api, ApiError, type Severity } from '@/lib/api'
-import { AnonymizationLine, ResultSample } from '@/components/ResultSample'
-import type { AnonymizationInfo } from '@/lib/api'
+import { api, ApiError, type AnonymizationInfo, type Severity } from '@/lib/api'
 import { type HuntEvent, useHuntStream } from '@/lib/useHuntStream'
+
+import { IconSpinner, IconStop } from '@/components/icons'
+import {
+  AnonymizationLine,
+  Bar,
+  Btn,
+  Chip,
+  Disclosure,
+  ErrorNotice,
+  Glass,
+  Inner,
+  Mono,
+  Notice,
+  QueryBlock,
+  ResultSample,
+  SeverityChip,
+  Stepper,
+  TruncationNotice,
+} from '@/components/ui'
 
 export function HuntLiveScreen() {
   const { huntId = '' } = useParams()
   const navigate = useNavigate()
   const stream = useHuntStream(huntId)
-
   const stop = useMutation({ mutationFn: () => api.stopHunt(huntId) })
 
   useEffect(() => {
@@ -41,98 +45,115 @@ export function HuntLiveScreen() {
   const findings = stream.events.filter((event) => event.type === 'finding_recorded')
   const entities = collectEntities(stream.events)
   const budgetPause = pendingBudgetPause(stream.events)
+  const iteration = latestIteration(stream.events)
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-      <section>
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-[22px] font-semibold tracking-tight text-ink">Investigation thread</h1>
-            <Mono className="text-slate">{huntId}</Mono>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <div className="min-w-0">
+          <p className="tech">
+            Hunts / <span className="text-[var(--ink)]">{huntId}</span>
+          </p>
+          <h1 className="mt-1">Investigation thread</h1>
+          <p className="mt-2 text-[15px] text-[var(--slate)]">Every query is read-only, minimized and pseudonymized before the agent reads it.</p>
+        </div>
+        <Stepper
+          steps={[
+            { label: 'Indicators', state: 'done' },
+            { label: 'Playbook', state: 'done' },
+            { label: stream.finished ? 'Verdict' : 'Running', state: 'now' },
+          ]}
+        />
+      </div>
+
+      <Glass className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <StreamStatus connected={stream.connected} finished={stream.finished} />
+              {iteration ? (
+                <Chip tone="soft" small>
+                  iteration {iteration}
+                </Chip>
+              ) : null}
+            </div>
+            <Btn variant="light" size="sm" onClick={() => stop.mutate()} disabled={stream.finished || stop.isPending}>
+              <IconStop size={16} /> Stop the hunt
+            </Btn>
           </div>
-          <div className="flex items-center gap-3">
-            <StreamStatus connected={stream.connected} finished={stream.finished} />
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => stop.mutate()}
-              disabled={stream.finished || stop.isPending}
-            >
-              Stop the hunt
-            </button>
-          </div>
-        </header>
 
-        {budgetPause && !stream.finished ? (
-          <BudgetCheckpoint
-            key={stream.events.indexOf(budgetPause)}
-            huntId={huntId}
-            budget={String(budgetPause.payload.budget ?? '')}
-          />
-        ) : null}
+          {budgetPause && !stream.finished ? (
+            <BudgetCheckpoint key={stream.events.indexOf(budgetPause)} huntId={huntId} budget={String(budgetPause.payload.budget ?? '')} />
+          ) : null}
 
-        {stream.error ? <ErrorNotice message={stream.error} /> : null}
+          {stream.error ? <ErrorNotice message={stream.error} /> : null}
 
-        <ol className="space-y-4">
-          {stream.events.map((event) => (
-            <li key={event.sequence}>
-              <EventCard event={event} />
-            </li>
-          ))}
-        </ol>
-
-        {stream.events.length === 0 && !stream.error ? (
-          <p className="meta-text">Waiting for the first step…</p>
-        ) : null}
-      </section>
-
-      <aside className="space-y-6">
-        <div className="card p-4">
-          <SectionTitle>Budgets</SectionTitle>
-          <dl className="mt-3 space-y-3">
-            {Object.entries(budgets).map(([name, budget]) => (
-              <BudgetBar key={name} label={budgetLabel(name)} used={budget.used} limit={budget.limit} />
+          <ol className="space-y-3">
+            {stream.events.map((event) => (
+              <li key={event.sequence}>
+                <EventCard event={event} />
+              </li>
             ))}
-          </dl>
+          </ol>
+
+          {stream.events.length === 0 && !stream.error ? <p className="muted">Waiting for the first step…</p> : null}
         </div>
 
-        <div className="card p-4">
-          <SectionTitle>Entities encountered</SectionTitle>
-          {entities.length === 0 ? (
-            <p className="meta-text mt-2">None yet.</p>
-          ) : (
-            <ul className="mt-3 space-y-1">
-              {entities.map((entity) => (
-                <li key={entity}>
-                  <Mono className="text-ink">{entity}</Mono>
-                </li>
+        <aside className="space-y-4">
+          <Inner className="p-5">
+            <h2 className="!text-[19px]">Budgets</h2>
+            <dl className="mt-3 space-y-3">
+              {Object.entries(budgets).map(([name, budget]) => (
+                <div key={name}>
+                  <div className="flex items-baseline justify-between text-[13.5px]">
+                    <dt>{budgetLabel(name)}</dt>
+                    <dd className="mono text-[12.5px] text-[var(--slate)]">
+                      {budget.used} / {budget.limit}
+                    </dd>
+                  </div>
+                  <Bar value={budget.used} max={budget.limit} tone={budget.limit > 0 && budget.used / budget.limit >= 0.8 ? 'amber' : 'navy'} className="mt-1.5" />
+                </div>
               ))}
-            </ul>
-          )}
-        </div>
+              {Object.keys(budgets).length === 0 ? <p className="muted text-[13.5px]">No budget snapshot yet.</p> : null}
+            </dl>
+          </Inner>
 
-        <div className="card p-4">
-          <SectionTitle>Findings</SectionTitle>
-          {findings.length === 0 ? (
-            <p className="meta-text mt-2">No finding recorded.</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {findings.map((event) => {
-                const finding = event.payload.finding as
-                  | { title: string; severity: Severity }
-                  | undefined
-                if (!finding) return null
-                return (
-                  <li key={event.sequence} className="space-y-1">
-                    <SeverityBadge severity={finding.severity} />
-                    <p className="text-sm text-ink">{finding.title}</p>
+          <Inner className="p-5">
+            <h2 className="!text-[19px]">Findings</h2>
+            {findings.length === 0 ? (
+              <p className="muted mt-2 text-[13.5px]">No finding recorded.</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {findings.map((event) => {
+                  const finding = event.payload.finding as { title: string; severity: Severity } | undefined
+                  if (!finding) return null
+                  return (
+                    <li key={event.sequence} className="flex items-start gap-3">
+                      <SeverityChip severity={finding.severity} small />
+                      <p className="text-[13.5px] leading-snug">{finding.title}</p>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </Inner>
+
+          <Inner className="p-5">
+            <h2 className="!text-[19px]">Entities encountered</h2>
+            {entities.length === 0 ? (
+              <p className="muted mt-2 text-[13.5px]">None yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-1.5">
+                {entities.map((entity) => (
+                  <li key={entity} className="mono text-[12.5px]">
+                    {entity}
                   </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
-      </aside>
+                ))}
+              </ul>
+            )}
+          </Inner>
+        </aside>
+      </Glass>
     </div>
   )
 }
@@ -141,39 +162,31 @@ function EventCard({ event }: { event: HuntEvent }) {
   switch (event.type) {
     case 'hunt_started':
       return (
-        <div className="card p-4">
-          <p className="meta-text">Hunt started</p>
-          <p className="mt-1 text-ink">{String(event.payload.hypothesis ?? '')}</p>
-        </div>
+        <Inner className="p-4">
+          <p className="tech">Hunt started</p>
+          <p className="mt-1">{String(event.payload.hypothesis ?? '')}</p>
+        </Inner>
       )
-
     case 'iteration_started':
-      return (
-        <p className="pt-2 text-xs uppercase tracking-wide text-slate">
-          Iteration {String(event.payload.iteration ?? '')}
-        </p>
-      )
-
+      return <p className="tech pt-2 uppercase tracking-wide">Iteration {String(event.payload.iteration ?? '')}</p>
     case 'agent_reasoning':
       return (
-        <div className="card border-l-2 border-l-indigo p-4">
-          <p className="whitespace-pre-wrap text-ink">{String(event.payload.text ?? '')}</p>
-        </div>
+        <Inner className="border-l-4 !border-l-[var(--indigo)] p-4">
+          <p className="whitespace-pre-wrap text-[14px] leading-relaxed">{String(event.payload.text ?? '')}</p>
+        </Inner>
       )
-
     case 'tool_call': {
       const args = (event.payload.arguments ?? {}) as Record<string, unknown>
       const intent = typeof args.intent === 'string' ? args.intent : null
       return (
-        <div className="card p-4">
-          <p className="meta-text">
-            Call to <Mono className="text-ink">{String(event.payload.tool ?? '')}</Mono>
+        <Inner className="p-4">
+          <p className="tech">
+            Call to <span className="text-[var(--ink)]">{String(event.payload.tool ?? '')}</span>
           </p>
-          {intent ? <p className="mt-1.5 text-sm text-ink">{intent}</p> : null}
-        </div>
+          {intent ? <p className="mt-1.5 text-[13.5px]">{intent}</p> : null}
+        </Inner>
       )
     }
-
     case 'tool_result': {
       const summary = (event.payload.summary ?? {}) as Record<string, unknown>
       const notes = (event.payload.notes ?? []) as string[]
@@ -185,182 +198,107 @@ function EventCard({ event }: { event: HuntEvent }) {
       const anonymization = (event.payload.anonymization ?? null) as AnonymizationInfo | null
       const sourceRows = Number(summary.source_rows ?? 0)
       return (
-        <div className="card space-y-3 p-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="font-medium capitalize text-ink">
+        <Inner className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Chip tone="navy" small className="capitalize">
               {String(summary.siem ?? event.payload.tool ?? '')}
-            </span>
-            <span className="meta-text">
+            </Chip>
+            <span className="text-[13px] text-[var(--slate)]">
               {String(summary.returned_rows ?? 0)} row(s) of {String(summary.source_rows ?? 0)}
             </span>
-            <Mono className="text-slate">{String(summary.query_id ?? '')}</Mono>
+            <Mono className="text-[var(--slate)]">{String(summary.query_id ?? '')}</Mono>
           </div>
-          {intent ? <p className="text-sm text-ink">{intent}</p> : null}
+          {intent ? <p className="text-[13.5px]">{intent}</p> : null}
           {sourceRows === 0 ? (
-            <p className="meta-text">No row returned.</p>
+            <p className="muted text-[13px]">No row returned.</p>
           ) : (
             <>
               <AnonymizationLine info={anonymization && 'tokens' in anonymization ? anonymization : null} />
-              <ResultSample
-                columns={columns}
-                rows={sample}
-                modelRows={modelSample}
-                sourceRows={sourceRows}
-              />
+              <ResultSample columns={columns} rows={sample} modelRows={modelSample} sourceRows={sourceRows} />
             </>
           )}
           {query ? (
-            <details className="group">
-              <summary className="flex cursor-pointer select-none items-center gap-1.5 text-sm text-indigo">
-                <span
-                  className="inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none"
-                  aria-hidden="true"
-                >
-                  ▸
-                </span>
-                View the executed query
-              </summary>
-              <div className="mt-2">
-                <QueryBlock query={query} />
-              </div>
-            </details>
+            <Disclosure summary="View the executed query">
+              <QueryBlock query={query} />
+            </Disclosure>
           ) : null}
           {summary.truncated ? (
             <TruncationNotice>
-              {String(summary.source_rows ?? '?')} rows returned by the source, cap reached:
-              there were probably more. The model received only{' '}
-              {String(summary.returned_rows ?? '?')}, with aggregates - narrow the query
-              rather than concluding on this basis.
+              {String(summary.source_rows ?? '?')} rows returned by the source, cap reached: there were probably more. The model received only {String(summary.returned_rows ?? '?')}, with aggregates; narrow the query rather than concluding on this basis.
             </TruncationNotice>
           ) : null}
           {notes.map((note) => (
-            <p key={note} className="meta-text">
+            <p key={note} className="text-[13px] text-[var(--slate)]">
               {note}
             </p>
           ))}
-        </div>
+        </Inner>
       )
     }
-
     case 'tool_error':
-      return (
-        <ErrorNotice
-          message={`${String(event.payload.tool ?? 'Tool')} - ${String(
-            event.payload.message ?? 'call refused',
-          )}`}
-          hint={(event.payload.hint as string | null) ?? null}
-        />
-      )
-
+      return <ErrorNotice message={`${String(event.payload.tool ?? 'Tool')}: ${String(event.payload.message ?? 'call refused')}`} hint={(event.payload.hint as string | null) ?? null} />
     case 'finding_recorded': {
-      const finding = event.payload.finding as
-        | { title: string; description: string; severity: Severity; evidence_query_ids: string[] }
-        | undefined
+      const finding = event.payload.finding as { title: string; description: string; severity: Severity; evidence_query_ids: string[] } | undefined
       if (!finding) return null
       return (
-        <div className="card border-l-2 border-l-amber p-4">
-          <div className="flex items-center gap-3">
-            <SeverityBadge severity={finding.severity} />
-            <h3 className="font-medium text-ink">{finding.title}</h3>
+        <Inner className="border-l-4 !border-l-[var(--amber)] p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <SeverityChip severity={finding.severity} small />
+            <h3>{finding.title}</h3>
           </div>
-          <p className="mt-2 text-sm text-ink">{finding.description}</p>
-          <p className="meta-text mt-2">
-            Evidence: {finding.evidence_query_ids.map((id) => id).join(', ')}
-          </p>
-        </div>
+          <p className="mt-2 text-[13.5px] leading-relaxed">{finding.description}</p>
+          <p className="tech mt-2">Evidence: {finding.evidence_query_ids.join(', ')}</p>
+        </Inner>
       )
     }
-
     case 'budget_alert':
       return (
-        <div className="rounded border border-amber/40 bg-amber/5 px-4 py-3">
-          <p className="text-amber">
-            Budget {String(event.payload.budget ?? '')} more than 80% consumed.
-          </p>
-        </div>
+        <Notice tone="amber">
+          Budget {String(event.payload.budget ?? '')} more than 80% consumed.
+        </Notice>
       )
-
     case 'interrupted':
       return (
-        <div className="rounded border border-amber/40 bg-amber/5 px-4 py-3">
-          <p className="text-amber">
-            Hunt interrupted: {String(event.payload.reason ?? 'reason not specified')}. A
-            partial report has been produced.
-          </p>
-        </div>
+        <Notice tone="amber">
+          Hunt interrupted: {String(event.payload.reason ?? 'reason not specified')}. A partial report has been produced.
+        </Notice>
       )
-
     case 'concluded':
       return (
-        <div className="card border-l-2 border-l-indigo p-4">
-          <p className="text-ink">
-            Investigation complete - proposed verdict:{' '}
-            <strong>{String(event.payload.proposed_verdict ?? '')}</strong>
+        <Inner className="border-l-4 !border-l-[var(--indigo)] p-4">
+          <p>
+            Investigation complete, proposed verdict: <strong>{String(event.payload.proposed_verdict ?? '')}</strong>
           </p>
-          <p className="meta-text mt-1">Redirecting to the report…</p>
-        </div>
+          <p className="muted mt-1 text-[13px]">Redirecting to the report…</p>
+        </Inner>
       )
-
     default:
       return null
   }
 }
 
 function StreamStatus({ connected, finished }: { connected: boolean; finished: boolean }) {
-  if (finished) return <span className="meta-text">finished</span>
+  if (finished)
+    return (
+      <Chip tone="soft" small>
+        finished
+      </Chip>
+    )
   return (
-    <span className="meta-text flex items-center gap-2">
-      <span
-        className={`h-2 w-2 rounded-full ${connected ? 'bg-indigo' : 'bg-slate/40'}`}
-        aria-hidden="true"
-      />
+    <Chip tone={connected ? 'indigo' : 'soft'} small>
+      {connected ? <IconSpinner size={14} /> : null}
       {connected ? 'live' : 'connecting…'}
-    </span>
-  )
-}
-
-function BudgetBar({ label, used, limit }: { label: string; used: number; limit: number }) {
-  const ratio = limit > 0 ? Math.min(1, used / limit) : 0
-  const tone = ratio >= 0.8 ? 'bg-amber' : 'bg-indigo'
-  return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <dt className="text-sm text-ink">{label}</dt>
-        <dd className="meta-text">
-          {used} / {limit}
-        </dd>
-      </div>
-      <div
-        className="mt-1 h-1.5 overflow-hidden rounded bg-rule"
-        role="progressbar"
-        aria-valuenow={used}
-        aria-valuemin={0}
-        aria-valuemax={limit}
-        aria-label={label}
-      >
-        <div className={`h-full ${tone}`} style={{ width: `${ratio * 100}%` }} />
-      </div>
-    </div>
+    </Chip>
   )
 }
 
 type BudgetSnapshot = Record<string, { used: number; limit: number }>
 
-/** A budget pause is pending if no event has followed it with a resumption,
- *  an extension, an interruption or a conclusion. */
 function pendingBudgetPause(events: HuntEvent[]): HuntEvent | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const type = events[index].type
     if (type === 'budget_paused') return events[index]
-    if (
-      type === 'budget_extended' ||
-      type === 'interrupted' ||
-      type === 'concluded' ||
-      type === 'failed' ||
-      type === 'iteration_started'
-    ) {
-      return null
-    }
+    if (type === 'budget_extended' || type === 'interrupted' || type === 'concluded' || type === 'failed' || type === 'iteration_started') return null
   }
   return null
 }
@@ -378,14 +316,7 @@ function BudgetCheckpoint({ huntId, budget }: { huntId: string; budget: string }
     try {
       await api.decideBudget(huntId, {
         action,
-        ...(action === 'extend'
-          ? {
-              extra_iterations: extraIterations,
-              extra_siem_queries: extraQueries,
-              extra_minutes: 10,
-              extra_tokens: extraTokens,
-            }
-          : {}),
+        ...(action === 'extend' ? { extra_iterations: extraIterations, extra_siem_queries: extraQueries, extra_minutes: 10, extra_tokens: extraTokens } : {}),
       })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'The decision failed.')
@@ -394,79 +325,40 @@ function BudgetCheckpoint({ huntId, budget }: { huntId: string; budget: string }
   }
 
   return (
-    <div
-      className="mb-5 rounded-xl border border-[#e8d5b0] bg-[#faeddc]/70 px-4 py-4"
-      role="alert"
-    >
-      <p className="text-[13px] font-semibold text-ink">
-        Budget exhausted ({budget}) - the investigation is paused.
+    <div className="rounded-[22px] border border-[#ecd9bf] bg-[#f8ebd9]/80 p-5" role="alert">
+      <h3>Budget exhausted ({budget}), the investigation is paused.</h3>
+      <p className="mt-1 text-[13.5px] text-[var(--slate)]">
+        Continue with an additional amount (the agent resumes exactly where it left off), or stop and receive the partial report. Without a response within the time limit, the hunt stops cleanly.
       </p>
-      <p className="meta-text mt-1">
-        Continue with an additional amount (the agent resumes exactly where it left off),
-        or stop and receive the partial report. Without a response within the time limit,
-        the hunt stops cleanly.
-      </p>
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        <label className="text-xs text-ink">
-          <span className="label mb-1 block">+ iterations</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={extraIterations}
-            onChange={(event) =>
-              setExtraIterations(Math.min(100, Math.max(0, Number(event.target.value) || 0)))
-            }
-            className="field w-24 font-mono text-sm"
-          />
-        </label>
-        <label className="text-xs text-ink">
-          <span className="label mb-1 block">+ SIEM queries</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={extraQueries}
-            onChange={(event) =>
-              setExtraQueries(Math.min(100, Math.max(0, Number(event.target.value) || 0)))
-            }
-            className="field w-24 font-mono text-sm"
-          />
-        </label>
-        <label className="text-xs text-ink">
-          <span className="label mb-1 block">+ tokens</span>
-          <input
-            type="number"
-            min={0}
-            max={2000000}
-            step={50000}
-            value={extraTokens}
-            onChange={(event) =>
-              setExtraTokens(Math.min(2_000_000, Math.max(0, Number(event.target.value) || 0)))
-            }
-            className="field w-32 font-mono text-sm"
-          />
-        </label>
-        <button
-          type="button"
-          className="btn-primary"
-          disabled={
-            pending || (extraIterations === 0 && extraQueries === 0 && extraTokens === 0)
-          }
-          onClick={() => void decide('extend')}
-        >
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        {(
+          [
+            ['+ iterations', extraIterations, setExtraIterations, 100, 1],
+            ['+ SIEM queries', extraQueries, setExtraQueries, 100, 1],
+            ['+ tokens', extraTokens, setExtraTokens, 2_000_000, 50_000],
+          ] as const
+        ).map(([label, value, setter, max, step]) => (
+          <label key={label} className="text-[13px]">
+            <span className="lbl block">{label}</span>
+            <input
+              type="number"
+              min={0}
+              max={max}
+              step={step}
+              value={value}
+              onChange={(event) => setter(Math.min(max, Math.max(0, Number(event.target.value) || 0)))}
+              className="field field-pill mono mt-1 w-36"
+            />
+          </label>
+        ))}
+        <Btn onClick={() => void decide('extend')} disabled={pending || (extraIterations === 0 && extraQueries === 0 && extraTokens === 0)}>
           Continue
-        </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={pending}
-          onClick={() => void decide('stop')}
-        >
+        </Btn>
+        <Btn variant="light" onClick={() => void decide('stop')} disabled={pending}>
           Stop and generate the report
-        </button>
+        </Btn>
       </div>
-      {error ? <p className="mt-2 text-xs text-garnet">{error}</p> : null}
+      {error ? <p className="mt-2 text-[13px] text-[var(--garnet)]">{error}</p> : null}
     </div>
   )
 }
@@ -474,11 +366,16 @@ function BudgetCheckpoint({ huntId, budget }: { huntId: string; budget: string }
 function latestBudgets(events: HuntEvent[]): BudgetSnapshot {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const budgets = events[index].payload.budgets
-    if (budgets && typeof budgets === 'object') {
-      return budgets as BudgetSnapshot
-    }
+    if (budgets && typeof budgets === 'object') return budgets as BudgetSnapshot
   }
   return {}
+}
+
+function latestIteration(events: HuntEvent[]): string | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index].type === 'iteration_started') return String(events[index].payload.iteration ?? '')
+  }
+  return null
 }
 
 function budgetLabel(name: string): string {
@@ -495,12 +392,8 @@ function collectEntities(events: HuntEvent[]): string[] {
   const found = new Set<string>()
   for (const event of events) {
     if (event.type !== 'finding_recorded') continue
-    const finding = event.payload.finding as
-      | { entities?: { type: string; value: string }[] }
-      | undefined
-    for (const entity of finding?.entities ?? []) {
-      found.add(`${entity.type}: ${entity.value}`)
-    }
+    const finding = event.payload.finding as { entities?: { type: string; value: string }[] } | undefined
+    for (const entity of finding?.entities ?? []) found.add(`${entity.type}: ${entity.value}`)
   }
   return [...found]
 }

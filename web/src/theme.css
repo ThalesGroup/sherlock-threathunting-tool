@@ -1,0 +1,836 @@
+/*
+ * SHERLOCK interface: glass surfaces on a cool grey ground, Outfit for text, IBM Plex Mono
+ * for anything a machine produced. Every rule is scoped under `.app`.
+ *
+ * The fonts are served with the application (web/public/fonts): the analyst's browser
+ * never fetches a CDN.
+ */
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/Outfit-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/IBMPlexMono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/IBMPlexMono-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/IBMPlexMono-600.woff2') format('woff2');
+}
+
+.app {
+  --bg: #e3e8ef;
+  --ink: #12212f;
+  --slate: #5b6b7c;
+  --meta: #8494a3;
+  --navy: #0d1e33;
+  --navy-hover: #183254;
+  --accent: #2b8fd6;
+  --indigo: #0a5f9e;
+  --amber: #a8560b;
+  --garnet: #8f1d1d;
+  --mint: #1f6f5c;
+  --rule: #d3dae1;
+  --rule-soft: #eef1f4;
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --inner: rgba(255, 255, 255, 0.72);
+  --inner-border: rgba(255, 255, 255, 0.9);
+
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: 'Outfit', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(55% 45% at 88% 0%, rgba(243, 233, 214, 0.75), transparent 62%),
+    radial-gradient(50% 45% at 0% 100%, rgba(199, 214, 236, 0.85), transparent 60%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app h1,
+.app h2,
+.app h3 {
+  font-family: 'Outfit', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.app h1 {
+  font-size: 38px;
+  line-height: 1.1;
+}
+.app h2 {
+  font-size: 22px;
+  line-height: 1.2;
+}
+.app h3 {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.app .mono,
+.app .m {
+  font-family: 'IBM Plex Mono', Menlo, Consolas, monospace;
+}
+
+.app a {
+  color: inherit;
+}
+
+.app :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Surfaces */
+.app .glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 30px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.app .inner {
+  background: var(--inner);
+  border: 1px solid var(--inner-border);
+  border-radius: 22px;
+}
+.app .inner-solid {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--inner-border);
+  border-radius: 22px;
+}
+.app .tile {
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 96px;
+}
+
+/* Chips */
+.app .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+}
+.app .chip-sm {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+.app .chip-navy {
+  background: var(--navy);
+  color: #fff;
+}
+.app .chip-amber {
+  background: #f8ebd9;
+  color: var(--amber);
+}
+.app .chip-garnet {
+  background: #f6e1df;
+  color: var(--garnet);
+}
+.app .chip-mint {
+  background: #e0efea;
+  color: var(--mint);
+}
+.app .chip-indigo {
+  background: #e0ecf7;
+  color: var(--indigo);
+}
+.app .chip-soft {
+  background: #eaeef2;
+  color: var(--slate);
+}
+.app .chip-olive {
+  background: #f3efd8;
+  color: #7d6510;
+}
+
+/* Round icon buttons and avatars */
+.app .ic {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--rule);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.app .ic:hover {
+  background: #fff;
+}
+.app .ic.on,
+.app .ic-dark {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+.app .ic-dark:hover {
+  background: var(--navy-hover);
+}
+.app .sm {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid var(--rule);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.app .sm:hover {
+  background: #f6f8fa;
+}
+.app .sm:disabled,
+.app .ic:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.app .av {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  position: relative;
+  letter-spacing: 0.02em;
+}
+.app .av-sm {
+  width: 30px;
+  height: 30px;
+  font-size: 10.5px;
+}
+.app .av b {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--amber);
+  color: #fff;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+}
+
+/* Buttons */
+.app .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: 24px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+  white-space: nowrap;
+}
+.app .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.app .btn-dark {
+  background: var(--navy);
+  color: #fff;
+}
+.app .btn-dark:not(:disabled):hover {
+  background: var(--navy-hover);
+}
+.app .btn-light {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+.app .btn-light:not(:disabled):hover {
+  background: #f6f8fa;
+}
+.app .btn-ghost {
+  background: transparent;
+  color: var(--ink);
+}
+.app .btn-ghost:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+.app .btn-sm {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  border-radius: 18px;
+}
+.app .btn-xs {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 15px;
+}
+.app .btn .end {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: -10px;
+}
+.app .link {
+  color: var(--indigo);
+  font-weight: 500;
+  text-decoration: none;
+}
+.app .link:hover {
+  text-decoration: underline;
+}
+
+/* Rail: an overlay that widens over the page on hover, the page behind it dimmed and
+   blurred so the labels read cleanly. Nothing is pushed or resized. */
+.app .rail {
+  width: 100px;
+  transition: width 0.18s ease;
+  overflow: hidden;
+}
+.app .rail:hover,
+.app .rail:focus-within,
+.app .rail.menu-open {
+  width: 250px;
+  background: rgba(227, 232, 239, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.app .rail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(227, 232, 239, 0.35);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.app .rail:hover ~ * .rail-backdrop,
+.app .rail:focus-within ~ * .rail-backdrop,
+.app .rail-backdrop:has(+ .rail:hover),
+.app .rail-backdrop:has(+ .rail:focus-within) {
+  opacity: 1;
+}
+.app .ri {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  padding: 0 24px;
+  color: var(--ink);
+  border-radius: 26px;
+  white-space: nowrap;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.app .ri .ic {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+.app .ri .rl {
+  font-size: 15px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.app .rail:hover .rl,
+.app .rail:focus-within .rl,
+.app .rail.menu-open .rl {
+  opacity: 1;
+}
+.app .ri:hover {
+  text-decoration: none;
+}
+.app .ri .ic {
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.app .ri:hover .ic,
+.app .ri:focus-visible .ic {
+  transform: scale(1.12);
+  background: #fff;
+}
+.app .ri:hover .ic.on,
+.app .ri:focus-visible .ic.on {
+  background: var(--navy-hover);
+}
+.app .ri:hover .rl {
+  transform: translateX(3px);
+}
+.app .ri .rl {
+  transition:
+    opacity 0.18s ease,
+    transform 0.15s ease;
+}
+.app .ri.on .rl {
+  font-weight: 600;
+}
+
+/* Fields */
+.app .field {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 12px 16px;
+  font: inherit;
+  color: var(--ink);
+  transition: border-color 0.15s ease;
+}
+.app .field::placeholder {
+  color: var(--meta);
+}
+.app .field:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.app .field:disabled {
+  opacity: 0.5;
+}
+.app .field-pill {
+  border-radius: 24px;
+  height: 48px;
+  padding: 0 20px;
+}
+.app textarea.field {
+  resize: vertical;
+  line-height: 1.5;
+}
+.app select.field {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%235b6b7c' stroke-width='1.6'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+.app .check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--navy);
+  cursor: pointer;
+}
+
+/* Text helpers */
+.app .muted {
+  color: var(--slate);
+}
+.app .meta {
+  color: var(--meta);
+}
+.app .lbl {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--slate);
+}
+.app .tech {
+  font-family: 'IBM Plex Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--slate);
+}
+.app .code {
+  font-family: 'IBM Plex Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--rule-soft);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin: 0;
+  color: var(--ink);
+}
+
+/* Tables */
+.app table.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.app table.tbl th {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--slate);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.app table.tbl td {
+  padding: 12px;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: middle;
+}
+.app table.tbl tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Rings, bars, dots */
+.app .bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--rule-soft);
+  overflow: hidden;
+}
+.app .bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--navy);
+  transition: width 0.4s ease;
+}
+.app .bar-indeterminate > span {
+  width: 33%;
+  background: var(--accent);
+  animation: bar-slide 1.2s linear infinite;
+}
+@keyframes bar-slide {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+.app .dots {
+  display: flex;
+  gap: 4px;
+}
+.app .dots i {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--rule);
+}
+.app .dots i.on {
+  background: var(--navy);
+}
+.app .spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Stepper */
+.app .stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 10px 0 8px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--glass-border);
+}
+.app .step {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px 0 4px;
+  border-radius: 22px;
+  font-size: 14px;
+  color: var(--slate);
+  white-space: nowrap;
+}
+.app .step .n {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid var(--rule);
+  color: var(--slate);
+}
+.app .step.done .n {
+  background: var(--mint);
+  border-color: var(--mint);
+  color: #fff;
+}
+.app .step.now {
+  background: var(--navy);
+  color: #fff;
+  font-weight: 600;
+}
+.app .step.now .n {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #fff;
+}
+.app .step-sep {
+  width: 16px;
+  height: 1px;
+  background: var(--rule);
+}
+
+/* Segmented control */
+.app .seg {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 28px;
+  background: #e9edf2;
+}
+.app .seg label,
+.app .seg button {
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 22px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--slate);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+.app .seg .on {
+  background: var(--navy);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Tabs (pill group) */
+.app .tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--glass-border);
+}
+.app .tabs button {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 20px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--slate);
+  cursor: pointer;
+}
+.app .tabs button.on {
+  background: var(--navy);
+  color: #fff;
+  font-weight: 600;
+}
+.app .tabs button.warn {
+  color: var(--amber);
+}
+
+/* Notices */
+.app .notice {
+  border-radius: 18px;
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 13.5px;
+}
+.app .notice-amber {
+  background: #f8ebd9;
+  color: var(--amber);
+}
+.app .notice-garnet {
+  background: #f6e1df;
+  color: var(--garnet);
+}
+.app .notice-mint {
+  background: #e0efea;
+  color: var(--mint);
+}
+.app .notice-soft {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--slate);
+}
+
+/* Kanban connectors */
+.app .flow-arrow {
+  color: var(--accent);
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* Popover */
+.app .pop {
+  position: absolute;
+  left: 100%;
+  bottom: 0;
+  margin-left: 12px;
+  width: 280px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--inner-border);
+  box-shadow: 0 12px 40px rgba(18, 33, 47, 0.14);
+  z-index: 30;
+}
+
+/* Account menu: fixed next to the rail, outside its clipped overflow. */
+.app.rail-menu {
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.97);
+}
+.app .rail-menu,
+.app.rail-menu {
+  position: fixed;
+  left: 262px;
+  bottom: 24px;
+  width: 280px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--inner-border);
+  box-shadow: 0 12px 40px rgba(18, 33, 47, 0.16);
+  z-index: 40;
+}
+
+/* Tooltip: opens on hover and keyboard focus */
+.app .tip {
+  position: relative;
+  display: inline-flex;
+  cursor: help;
+}
+.app .tip > span {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 300px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-transform: none;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(18, 33, 47, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 40;
+}
+.app .tip > span::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--navy);
+}
+.app .tip:hover > span,
+.app .tip:focus-visible > span {
+  opacity: 1;
+}
+.app .tip-left > span {
+  left: 0;
+  transform: none;
+}
+.app .tip-left > span::after {
+  left: 10px;
+  margin-left: 0;
+}
+
+.app details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.app details > summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app *,
+  .app *::before,
+  .app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

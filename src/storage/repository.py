@@ -6,6 +6,7 @@ update or delete an event, even for an administrator: a modifiable log proves no
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
@@ -107,9 +108,35 @@ class SqlAuditSink(AuditSink):
             await session.commit()
 
 
+_REFERENCE_RE = re.compile(r"^[A-Z]+-(\d{4})-(\d{3,})$")
+
+
+def reference_prefix(hunt_id: str) -> str | None:
+    """`CAMP-2609-018` -> `CAMP`. None for an identifier in another format."""
+
+    head, _, _ = hunt_id.partition("-")
+    return head if _REFERENCE_RE.match(hunt_id) else None
+
+
 class HuntRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    async def next_reference(self, prefix: str, *, moment: datetime | None = None) -> str:
+        """Next hunt reference `PREFIX-YYMM-NNN`: the prefix names the origin of the hunt
+        (HYP hypothesis, CAMP campaign, CTI report), the four digits the year and month,
+        the number the rank of the hunt within that month, all origins together."""
+
+        now = moment or datetime.now(UTC)
+        yymm = now.strftime("%y%m")
+        async with self._database.session() as session:
+            rows = await session.execute(select(HuntRow.id).where(HuntRow.id.like(f"%-{yymm}-%")))
+            ranks = [
+                int(match.group(2))
+                for match in (_REFERENCE_RE.match(value) for value in rows.scalars())
+                if match and match.group(1) == yymm
+            ]
+        return f"{prefix}-{yymm}-{max(ranks, default=0) + 1:03d}"
 
     async def create_hunt(self, dossier: Dossier) -> None:
         async with self._database.session() as session:
@@ -268,6 +295,8 @@ class HuntRepository:
             report = HuntReport.model_validate(row.payload)
             if row.human_verdict:
                 report.human_decision = _decision(row)
+                # The payload was frozen at conclusion; the verdict closed the hunt since.
+                report.status = HuntStatus.CLOSED
             return report
 
     async def record_decision(
@@ -325,7 +354,9 @@ class HuntRepository:
             if status:
                 statement = statement.where(HuntRow.status == status.value)
             rows = await session.execute(statement)
-            return [_hunt_summary(row) for row in rows.scalars()]
+            hunts = list(rows.scalars())
+            verdicts = await _verdicts(session, [hunt.id for hunt in hunts])
+            return [_hunt_summary(row, verdicts.get(row.id)) for row in hunts]
 
     async def get_hunt(self, hunt_id: str) -> dict[str, Any] | None:
         async with self._database.session() as session:
@@ -454,6 +485,7 @@ class HuntRepository:
             )
             findings = (await session.execute(select(FindingRow))).scalars().all()
             queries = (await session.execute(select(QueryRow))).scalars().all()
+            verdicts = await _verdicts(session, [hunt.id for hunt in hunts])
 
         severity_counts: dict[str, int] = {}
         for finding in findings:
@@ -470,7 +502,7 @@ class HuntRepository:
             siem_counts[query.siem] = siem_counts.get(query.siem, 0) + 1
 
         return {
-            "recent_hunts": [_hunt_summary(hunt) for hunt in hunts],
+            "recent_hunts": [_hunt_summary(hunt, verdicts.get(hunt.id)) for hunt in hunts],
             "findings_by_severity": severity_counts,
             "top_entities": sorted(
                 ({"entity": key, "count": count} for key, count in entity_counts.items()),
@@ -501,7 +533,24 @@ def _finding_row(hunt_id: str, finding: Finding) -> FindingRow:
     )
 
 
-def _hunt_summary(row: HuntRow) -> dict[str, Any]:
+async def _verdicts(
+    session: AsyncSession, hunt_ids: list[str]
+) -> dict[str, tuple[str, str | None]]:
+    """(proposed verdict, human verdict) of the hunts that have a report: what the
+    lists need to label a closed hunt without loading each report."""
+
+    if not hunt_ids:
+        return {}
+    rows = await session.execute(
+        select(ReportRow.hunt_id, ReportRow.proposed_verdict, ReportRow.human_verdict).where(
+            ReportRow.hunt_id.in_(hunt_ids)
+        )
+    )
+    return {hunt_id: (proposed, human) for hunt_id, proposed, human in rows.all()}
+
+
+def _hunt_summary(row: HuntRow, verdicts: tuple[str, str | None] | None = None) -> dict[str, Any]:
+    proposed, human = verdicts if verdicts else (None, None)
     return {
         "hunt_id": row.id,
         "hypothesis": row.hypothesis,
@@ -513,6 +562,8 @@ def _hunt_summary(row: HuntRow) -> dict[str, Any]:
         "playbook": row.playbook,
         "parent_hunt_id": row.parent_hunt_id,
         "resume_context": row.resume_context,
+        "proposed_verdict": proposed,
+        "verdict": human,
     }
 
 

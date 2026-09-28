@@ -521,6 +521,45 @@ class TestHuntLifecycle:
         assert response.content.startswith(b"%PDF")
 
 
+class TestHuntReferences:
+    """A hunt reference reads PREFIX-YYMM-NNN: the origin (HYP, CAMP, CTI), the year and
+    month of creation, and the rank of the hunt within that month, all origins together."""
+
+    async def test_reference_carries_origin_month_and_rank(self, app_context):
+        client, _, _ = app_context
+        from datetime import UTC, datetime
+
+        yymm = datetime.now(UTC).strftime("%y%m")
+        first = await _create_hunt(client, campaign=None)
+        second = await _create_hunt(client)
+        third = (
+            await client.post(
+                "/api/hunts",
+                json={"campaign": "APT29 TeamCity", "origin": "cti"},
+                headers=ANALYST,
+            )
+        ).json()
+
+        assert first["hunt_id"] == f"HYP-{yymm}-001"
+        assert second["hunt_id"] == f"CAMP-{yymm}-002"
+        assert third["hunt_id"] == f"CTI-{yymm}-003"
+
+    async def test_resumed_hunt_keeps_the_origin_of_its_parent(self, app_context):
+        client, runtime, _ = app_context
+        created = await _create_hunt(client)
+        hunt_id = created["hunt_id"]
+        await client.post(f"/api/hunts/{hunt_id}/start", headers=ANALYST, json=BUDGETS)
+        await runtime.get(hunt_id).task
+
+        resumed = await client.post(
+            f"/api/hunts/{hunt_id}/resume", headers=ANALYST, json={"instruction": "go on"}
+        )
+        assert resumed.status_code == 201, resumed.text
+        child = resumed.json()["hunt_id"]
+        assert child.startswith("CAMP-") and child.endswith("-002")
+        assert resumed.json()["parent_hunt_id"] == hunt_id
+
+
 class TestHumanVerdict:
     async def test_decision_is_dated_and_attributed(self, app_context):
         client, runtime, repository = app_context
@@ -541,6 +580,37 @@ class TestHumanVerdict:
         assert report.human_decision.verdict.value == "escalate"
         assert report.human_decision.decided_by == "j.doe"
         assert report.human_decision.decided_at
+        assert report.status is HuntStatus.CLOSED
+        served = (await client.get(f"/api/hunts/{hunt_id}/report", headers=ANALYST)).json()
+        assert served["status"] == "closed"
+
+    async def test_listing_exposes_the_verdicts_once_decided(self, app_context):
+        """The lists (history, dashboard) label a closed hunt with its verdict without
+        loading every report: the proposal and the human decision ride on the summary."""
+
+        client, runtime, _ = app_context
+        created = await _create_hunt(client)
+        hunt_id = created["hunt_id"]
+        await client.post(f"/api/hunts/{hunt_id}/start", headers=ANALYST, json=BUDGETS)
+        await runtime.get(hunt_id).task
+
+        async def summary():
+            listed = (await client.get("/api/hunts", headers=ANALYST)).json()
+            return next(h for h in listed if h["hunt_id"] == hunt_id)
+
+        before = await summary()
+        assert before["proposed_verdict"] == "suspicious"
+        assert before["verdict"] is None
+
+        await client.post(
+            f"/api/hunts/{hunt_id}/decision", json={"verdict": "escalate"}, headers=ANALYST
+        )
+        after = await summary()
+        assert after["verdict"] == "escalate"
+        dashboard = (await client.get("/api/dashboard", headers=ANALYST)).json()
+        assert next(h for h in dashboard["recent_hunts"] if h["hunt_id"] == hunt_id)["verdict"] == (
+            "escalate"
+        )
 
     async def test_reader_cannot_decide(self, app_context):
         client, runtime, _ = app_context

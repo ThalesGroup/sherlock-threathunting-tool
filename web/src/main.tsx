@@ -3,28 +3,28 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 
-import { AppShell } from '@/components/AppShell'
+import { AppShell } from '@/components/Shell'
+import { queryClient } from '@/lib/queryClient'
 import { ConfigurationScreen } from '@/screens/Configuration'
 import { CtiScreen } from '@/screens/Cti'
 import { DashboardScreen } from '@/screens/Dashboard'
 import { HistoryScreen } from '@/screens/History'
 import { HuntLiveScreen } from '@/screens/HuntLive'
 import { IocValidationScreen } from '@/screens/IocValidation'
-import { PlaybookScreen } from '@/screens/Playbook'
 import { NewHuntScreen } from '@/screens/NewHunt'
+import { PlaybookScreen } from '@/screens/Playbook'
 import { ReportScreen } from '@/screens/Report'
 
-import { queryClient } from '@/lib/queryClient'
-
 import './index.css'
+import './theme.css'
 
 const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell />,
     children: [
-      { index: true, element: <NewHuntScreen /> },
-      { path: 'dashboard', element: <DashboardScreen /> },
+      { index: true, element: <DashboardScreen /> },
+      { path: 'new', element: <NewHuntScreen /> },
       { path: 'cti', element: <CtiScreen /> },
       { path: 'history', element: <HistoryScreen /> },
       { path: 'configuration', element: <ConfigurationScreen /> },

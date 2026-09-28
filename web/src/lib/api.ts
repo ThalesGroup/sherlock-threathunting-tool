@@ -60,6 +60,9 @@ export interface HuntSummary {
   status: HuntStatus;
   created_at: string;
   interruption_reason: string | null;
+  /** Agent's proposal and human decision, present once a report exists. */
+  proposed_verdict?: Verdict | null;
+  verdict?: Verdict | null;
 }
 
 export interface Finding {
@@ -228,6 +231,8 @@ export interface CreateHuntPayload {
   campaign?: string | null;
   manual_iocs?: { value: string; type: string; note?: string }[];
   sources?: string[];
+  /** "cti" when launched from an analyzed CTI report: sets the reference prefix. */
+  origin?: "cti";
   max_iterations?: number;
   max_siem_queries?: number;
   window_start?: string;
