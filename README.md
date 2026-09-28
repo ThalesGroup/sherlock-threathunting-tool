@@ -45,7 +45,7 @@ non-negotiable guarantees, enforced in code rather than merely prompted:
    and a proposed verdict the analyst confirms.
 
 <p align="center">
-  <img src="docs/media/sherlock-demo.gif" alt="SHERLOCK: playbook validation, live investigation, report" width="800">
+  <img src="docs/media/sherlock-demo.gif" alt="SHERLOCK: playbook validation, live investigation, report" width="900">
 </p>
 
 An interrupted hunt keeps its execution state and can be **continued where it stopped**,
